@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiet Study — Chess</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<style>
+  :root{
+    --bg: #15130f;
+    --panel: #1e1b15;
+    --panel-raised: #262219;
+    --line: #3a3427;
+    --ivory: #f2ecdf;
+    --muted: #a89f8c;
+    --square-light: #e8e0c8;
+    --square-dark: #6d7a52;
+    --gold: #c9a24d;
+    --gold-dim: #8a713a;
+    --teal: #4fb3a9;
+    --danger: #b5544a;
+    --radius: 10px;
+    --shadow: 0 8px 24px rgba(0,0,0,0.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 800px at 15% -10%, #221f18 0%, transparent 60%),
+      radial-gradient(1000px 700px at 110% 10%, #201c15 0%, transparent 55%),
+      var(--bg);
+    color:var(--ivory);
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+  }
+  .app{
+    max-width:1180px;
+    margin:0 auto;
+    padding:32px 20px 60px;
+  }
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:28px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:18px;
+  }
+  header h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:2.1rem;
+    margin:0;
+    letter-spacing:0.2px;
+  }
+  header h1 span{ color:var(--gold); font-style:italic; font-weight:500; }
+  header p{
+    margin:0;
+    color:var(--muted);
+    font-size:0.92rem;
+  }
+  main{
+    display:grid;
+    grid-template-columns:minmax(320px, 620px) 300px;
+    gap:32px;
+    align-items:start;
+    justify-content:center;
+  }
+  @media (max-width:880px){
+    main{grid-template-columns:1fr; justify-items:center;}
+  }
+
+  .board-wrap{ display:flex; flex-direction:column; align-items:center; gap:14px; width:100%; }
+
+  .board-frame{
+    position:relative;
+    padding:22px;
+    background:linear-gradient(155deg, #2a2418, #1c1810);
+    border-radius:14px;
+    box-shadow:var(--shadow), inset 0 0 0 1px #3a3327;
+  }
+  .board-labels-files{
+    display:grid;
+    grid-template-columns:repeat(8, 1fr);
+    margin-top:6px;
+    padding:0 2px;
+  }
+  .board-labels-files span, .board-labels-ranks span{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    color:var(--gold-dim);
+    text-align:center;
+  }
+  .board-with-ranks{ display:flex; align-items:stretch; gap:6px; }
+  .board-labels-ranks{
+    display:grid;
+    grid-template-rows:repeat(8, 1fr);
+    align-items:center;
+  }
+  .board{
+    display:grid;
+    grid-template-columns:repeat(8, 1fr);
+    grid-template-rows:repeat(8, 1fr);
+    width:min(72vw, 480px);
+    height:min(72vw, 480px);
+    border-radius:4px;
+    overflow:hidden;
+    box-shadow:0 0 0 3px #3a3327, 0 0 0 4px #0c0a07;
+  }
+  .sq{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:min(7.5vw, 42px);
+    cursor:pointer;
+    user-select:none;
+    transition:background-color 0.12s ease;
+  }
+  .sq.light{ background:var(--square-light); }
+  .sq.dark{ background:var(--square-dark); }
+  .sq .piece{
+    line-height:1;
+    filter:drop-shadow(0 2px 1px rgba(0,0,0,0.35));
+    transform:translateY(-2px);
+    pointer-events:none;
+  }
+  .sq .piece.white-piece{ color:#faf6ea; -webkit-text-stroke:1px #4a4632; }
+  .sq .piece.black-piece{ color:#1c1a15; }
+
+  .sq.selected{ background-color:var(--gold) !important; }
+  .sq.last-from, .sq.last-to{ box-shadow:inset 0 0 0 3px rgba(201,162,77,0.55); }
+  .sq.hint-from, .sq.hint-to{ box-shadow:inset 0 0 0 3px var(--teal); }
+  .sq.in-check{ background-color:var(--danger) !important; }
+
+  .move-dot::after{
+    content:'';
+    position:absolute;
+    width:26%;
+    height:26%;
+    border-radius:50%;
+    background:rgba(20,18,12,0.42);
+  }
+  .move-dot.capture-dot::after{
+    width:82%;
+    height:82%;
+    background:transparent;
+    border:4px solid rgba(20,18,12,0.5);
+    border-radius:50%;
+  }
+
+  .status{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.85rem;
+    color:var(--muted);
+    min-height:20px;
+    text-align:center;
+  }
+  .status.active{ color:var(--gold); }
+  .status.over{ color:var(--danger); font-weight:600; }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:20px;
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+    width:100%;
+  }
+  .control-group h2{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:0.78rem;
+    letter-spacing:1.4px;
+    text-transform:uppercase;
+    color:var(--gold-dim);
+    margin:0 0 10px 0;
+  }
+  .toggle{ display:flex; gap:8px; }
+  .side-btn{
+    flex:1;
+    padding:10px 8px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--panel-raised);
+    color:var(--muted);
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size:0.85rem;
+    cursor:pointer;
+    transition:all 0.15s ease;
+  }
+  .side-btn.active{
+    background:var(--gold);
+    color:#1c1810;
+    border-color:var(--gold);
+  }
+  .side-btn:hover:not(.active){ border-color:var(--gold-dim); color:var(--ivory); }
+
+  select#difficulty{
+    width:100%;
+    padding:10px;
+    border-radius:8px;
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    color:var(--ivory);
+    font-family:'Inter', sans-serif;
+    font-size:0.88rem;
+  }
+  .difficulty-note{
+    font-size:0.74rem;
+    color:var(--muted);
+    margin-top:6px;
+    line-height:1.4;
+  }
+
+  .buttons-row{ display:flex; flex-direction:column; gap:8px; }
+  .btn{
+    padding:11px 12px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--panel-raised);
+    color:var(--ivory);
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size:0.86rem;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    transition:all 0.15s ease;
+  }
+  .btn:hover:not(:disabled){ border-color:var(--gold-dim); }
+  .btn:disabled{ opacity:0.4; cursor:not-allowed; }
+  .btn.primary{ background:var(--teal); border-color:var(--teal); color:#0d211f; }
+  .btn.primary:hover:not(:disabled){ filter:brightness(1.08); }
+  .btn.subtle{ background:transparent; }
+
+  .captured{ display:flex; flex-direction:column; gap:6px; }
+  .captured-row{
+    min-height:26px;
+    font-size:1.15rem;
+    display:flex;
+    flex-wrap:wrap;
+    gap:2px;
+    color:var(--muted);
+  }
+  .captured-label{ font-size:0.7rem; color:var(--muted); font-family:'IBM Plex Mono', monospace; }
+
+  .history{ display:flex; flex-direction:column; gap:8px; flex:1; min-height:0; }
+  #moveList{
+    list-style:none;
+    margin:0;
+    padding:0;
+    max-height:220px;
+    overflow-y:auto;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.82rem;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+  }
+  #moveList li{
+    display:flex;
+    gap:10px;
+    padding:3px 4px;
+    border-radius:4px;
+  }
+  #moveList li:nth-child(odd){ background:rgba(255,255,255,0.02); }
+  #moveList .mv-num{ color:var(--gold-dim); width:22px; }
+  #moveList .mv-w, #moveList .mv-b{ min-width:56px; }
+
+  .hint-banner{
+    display:none;
+    background:rgba(79,179,169,0.12);
+    border:1px solid var(--teal);
+    color:var(--teal);
+    border-radius:8px;
+    padding:8px 10px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.78rem;
+  }
+  .hint-banner.show{ display:block; }
+
+  .modal-overlay{
+    position:fixed; inset:0;
+    background:rgba(10,9,6,0.72);
+    display:flex; align-items:center; justify-content:center;
+    z-index:50;
+  }
+  .modal-overlay.hidden{ display:none; }
+  .promo-box{
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:20px;
+    text-align:center;
+  }
+  .promo-box h3{ font-family:'Fraunces', serif; margin:0 0 14px 0; font-weight:600; }
+  .promo-choices{ display:flex; gap:10px; }
+  .promo-choices button{
+    font-size:2rem;
+    width:60px; height:60px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--ivory);
+    cursor:pointer;
+  }
+  .promo-choices button:hover{ border-color:var(--gold); background:var(--gold); color:#1c1810; }
+
+  footer{
+    text-align:center;
+    color:var(--muted);
+    font-size:0.76rem;
+    margin-top:36px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>Quiet Study <span>— a chess board</span></h1>
+      <p>Play either side. The engine on the other side of the board thinks in minimax.</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="board-wrap">
+      <div class="board-frame">
+        <div class="board-with-ranks">
+          <div class="board-labels-ranks" id="rankLabels"></div>
+          <div class="board" id="board"></div>
+        </div>
+        <div class="board-labels-files" id="fileLabels"></div>
+      </div>
+      <div class="status" id="status">Set up your game and press New Game.</div>
+      <div class="hint-banner" id="hintBanner"></div>
+    </div>
+
+    <aside class="panel">
+      <section class="control-group">
+        <h2>Play as</h2>
+        <div class="toggle">
+          <button class="side-btn active" data-side="w">White</button>
+          <button class="side-btn" data-side="b">Black</button>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h2>Opponent strength</h2>
+        <select id="difficulty">
+          <option value="1">Easy — thinks 1 move ahead</option>
+          <option value="2" selected>Medium — thinks 2 moves ahead</option>
+          <option value="3">Hard — thinks 3 moves ahead (slower)</option>
+        </select>
+        <div class="difficulty-note">Higher levels search more positions and take longer to move.</div>
+      </section>
+
+      <section class="control-group buttons-row">
+        <button class="btn" id="newGameBtn">↺ New Game</button>
+        <button class="btn" id="undoBtn">⤺ Undo my last move</button>
+        <button class="btn primary" id="hintBtn">◆ Hint (minimax suggestion)</button>
+      </section>
+
+      <section class="control-group captured">
+        <div>
+          <div class="captured-label">Captured by White</div>
+          <div class="captured-row" id="capturedByWhite"></div>
+        </div>
+        <div>
+          <div class="captured-label">Captured by Black</div>
+          <div class="captured-row" id="capturedByBlack"></div>
+        </div>
+      </section>
+
+      <section class="control-group history">
+        <h2>Moves</h2>
+        <ol id="moveList"></ol>
+      </section>
+    </aside>
+  </main>
+
+  <footer>Move generation and rules by chess.js. Opponent and hints computed locally with alpha-beta minimax.</footer>
+</div>
+
+<div class="modal-overlay hidden" id="promoModal">
+  <div class="promo-box">
+    <h3>Promote pawn to</h3>
+    <div class="promo-choices" id="promoChoices"></div>
+  </div>
+</div>
+
+<script>
+/* ---------------------------------------------------------
+   Evaluation tables and material values
+--------------------------------------------------------- */
+const PST = {
+  p: [
+    [0,0,0,0,0,0,0,0],
+    [50,50,50,50,50,50,50,50],
+    [10,10,20,30,30,20,10,10],
+    [5,5,10,25,25,10,5,5],
+    [0,0,0,20,20,0,0,0],
+    [5,-5,-10,0,0,-10,-5,5],
+    [5,10,10,-20,-20,10,10,5],
+    [0,0,0,0,0,0,0,0]
+  ],
+  n: [
+    [-50,-40,-30,-30,-30,-30,-40,-50],
+    [-40,-20,0,0,0,0,-20,-40],
+    [-30,0,10,15,15,10,0,-30],
+    [-30,5,15,20,20,15,5,-30],
+    [-30,0,15,20,20,15,0,-30],
+    [-30,5,10,15,15,10,5,-30],
+    [-40,-20,0,5,5,0,-20,-40],
+    [-50,-40,-30,-30,-30,-30,-40,-50]
+  ],
+  b: [
+    [-20,-10,-10,-10,-10,-10,-10,-20],
+    [-10,0,0,0,0,0,0,-10],
+    [-10,0,5,10,10,5,0,-10],
+    [-10,5,5,10,10,5,5,-10],
+    [-10,0,10,10,10,10,0,-10],
+    [-10,10,10,10,10,10,10,-10],
+    [-10,5,0,0,0,0,5,-10],
+    [-20,-10,-10,-10,-10,-10,-10,-20]
+  ],
+  r: [
+    [0,0,0,0,0,0,0,0],
+    [5,10,10,10,10,10,10,5],
+    [-5,0,0,0,0,0,0,-5],
+    [-5,0,0,0,0,0,0,-5],
+    [-5,0,0,0,0,0,0,-5],
+    [-5,0,0,0,0,0,0,-5],
+    [-5,0,0,0,0,0,0,-5],
+    [0,0,0,5,5,0,0,0]
+  ],
+  q: [
+    [-20,-10,-10,-5,-5,-10,-10,-20],
+    [-10,0,0,0,0,0,0,-10],
+    [-10,0,5,5,5,5,0,-10],
+    [-5,0,5,5,5,5,0,-5],
+    [0,0,5,5,5,5,0,-5],
+    [-10,5,5,5,5,5,0,-10],
+    [-10,0,5,0,0,0,0,-10],
+    [-20,-10,-10,-5,-5,-10,-10,-20]
+  ],
+  k: [
+    [-30,-40,-40,-50,-50,-40,-40,-30],
+    [-30,-40,-40,-50,-50,-40,-40,-30],
+    [-30,-40,-40,-50,-50,-40,-40,-30],
+    [-30,-40,-40,-50,-50,-40,-40,-30],
+    [-20,-30,-30,-40,-40,-30,-30,-20],
+    [-10,-20,-20,-20,-20,-20,-20,-10],
+    [20,20,0,0,0,0,20,20],
+    [20,30,10,0,0,10,30,20]
+  ]
+};
+const VALUES = { p:100, n:320, b:330, r:500, q:900, k:20000 };
+const PIECE_UNICODE = {
+  w:{ p:'♙', n:'♘', b:'♗', r:'♖', q:'♕', k:'♔' },
+  b:{ p:'♟', n:'♞', b:'♝', r:'♜', q:'♛', k:'♚' }
+};
+
+function evaluateBoard(game){
+  if (game.in_checkmate()) return game.turn() === 'w' ? -100000 : 100000;
+  if (game.in_draw() || game.in_stalemate() || game.in_threefold_repetition() || game.insufficient_material()) return 0;
+  const board = game.board();
+  let score = 0;
+  for (let r = 0; r < 8; r++){
+    for (let c = 0; c < 8; c++){
+      const piece = board[r][c];
+      if (!piece) continue;
+      const pst = piece.color === 'w' ? PST[piece.type][r][c] : PST[piece.type][7-r][c];
+      const val = VALUES[piece.type] + pst;
+      score += piece.color === 'w' ? val : -val;
+    }
+  }
+  return score;
+}
+
+function orderMoves(moves){
+  return moves.slice().sort((a,b) => (b.captured ? VALUES[b.captured] : 0) - (a.captured ? VALUES[a.captured] : 0));
+}
+
+function minimax(game, depth, alpha, beta, maximizing){
+  if (depth === 0 || game.game_over()){
+    return { score: evaluateBoard(game), move: null };
+  }
+  const moves = orderMoves(game.moves({ verbose: true }));
+  let best = maximizing ? -Infinity : Infinity;
+  const bestMoves = [];
+  for (const m of moves){
+    game.move(m.san);
+    const result = minimax(game, depth - 1, alpha, beta, !maximizing).score;
+    game.undo();
+    if (maximizing){
+      if (result > best){ best = result; bestMoves.length = 0; bestMoves.push(m); }
+      else if (result === best){ bestMoves.push(m); }
+      alpha = Math.max(alpha, result);
+    } else {
+      if (result < best){ best = result; bestMoves.length = 0; bestMoves.push(m); }
+      else if (result === best){ bestMoves.push(m); }
+      beta = Math.min(beta, result);
+    }
+    if (beta <= alpha) break;
+  }
+  const chosen = bestMoves.length ? bestMoves[Math.floor(Math.random() * bestMoves.length)] : moves[0];
+  return { score: best, move: chosen };
+}
+
+function findBestMove(game, depth){
+  const maximizing = game.turn() === 'w';
+  return minimax(game, depth, -Infinity, Infinity, maximizing);
+}
+
+/* ---------------------------------------------------------
+   App state
+--------------------------------------------------------- */
+const game = new Chess();
+let humanColor = 'w';
+let selectedSquare = null;
+let legalTargets = [];
+let lastMove = null;
+let hintMove = null;
+let thinking = false;
+let gameOver = false;
+
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('status');
+const hintBanner = document.getElementById('hintBanner');
+const moveListEl = document.getElementById('moveList');
+const capturedByWhiteEl = document.getElementById('capturedByWhite');
+const capturedByBlackEl = document.getElementById('capturedByBlack');
+const difficultySel = document.getElementById('difficulty');
+const newGameBtn = document.getElementById('newGameBtn');
+const undoBtn = document.getElementById('undoBtn');
+const hintBtn = document.getElementById('hintBtn');
+const promoModal = document.getElementById('promoModal');
+const promoChoices = document.getElementById('promoChoices');
+const fileLabels = document.getElementById('fileLabels');
+const rankLabels = document.getElementById('rankLabels');
+
+const FILES = ['a','b','c','d','e','f','g','h'];
+
+function squareName(row, col){
+  // row/col are in "white-orientation" board() indices: row0 = rank8
+  return FILES[col] + (8 - row);
+}
+
+function buildLabels(){
+  fileLabels.innerHTML = '';
+  rankLabels.innerHTML = '';
+  const files = humanColor === 'w' ? FILES : FILES.slice().reverse();
+  const ranks = humanColor === 'w' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  files.forEach(f => {
+    const s = document.createElement('span');
+    s.textContent = f;
+    fileLabels.appendChild(s);
+  });
+  ranks.forEach(r => {
+    const s = document.createElement('span');
+    s.textContent = r;
+    rankLabels.appendChild(s);
+  });
+}
+
+function render(){
+  boardEl.innerHTML = '';
+  const board = game.board();
+  const rowOrder = humanColor === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
+  const colOrder = humanColor === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
+
+  const kingInCheckSquare = getCheckedKingSquare();
+
+  for (const r of rowOrder){
+    for (const c of colOrder){
+      const sq = document.createElement('div');
+      const isLight = (r + c) % 2 === 0;
+      sq.className = 'sq ' + (isLight ? 'light' : 'dark');
+      const name = squareName(r, c);
+      sq.dataset.square = name;
+
+      if (selectedSquare === name) sq.classList.add('selected');
+      if (lastMove && (lastMove.from === name)) sq.classList.add('last-from');
+      if (lastMove && (lastMove.to === name)) sq.classList.add('last-to');
+      if (hintMove && hintMove.from === name) sq.classList.add('hint-from');
+      if (hintMove && hintMove.to === name) sq.classList.add('hint-to');
+      if (kingInCheckSquare === name) sq.classList.add('in-check');
+
+      const targetInfo = legalTargets.find(t => t.to === name);
+      if (targetInfo) {
+        sq.classList.add('move-dot');
+        if (targetInfo.captured) sq.classList.add('capture-dot');
+      }
+
+      const piece = board[r][c];
+      if (piece){
+        const span = document.createElement('span');
+        span.className = 'piece ' + (piece.color === 'w' ? 'white-piece' : 'black-piece');
+        span.textContent = PIECE_UNICODE[piece.color][piece.type];
+        sq.appendChild(span);
+      }
+
+      sq.addEventListener('click', () => onSquareClick(name));
+      boardEl.appendChild(sq);
+    }
+  }
+
+  renderMoveList();
+  renderCaptured();
+  updateStatus();
+}
+
+function getCheckedKingSquare(){
+  if (!game.in_check()) return null;
+  const board = game.board();
+  const turnColor = game.turn();
+  for (let r = 0; r < 8; r++){
+    for (let c = 0; c < 8; c++){
+      const p = board[r][c];
+      if (p && p.type === 'k' && p.color === turnColor) return squareName(r,c);
+    }
+  }
+  return null;
+}
+
+function renderMoveList(){
+  const history = game.history();
+  moveListEl.innerHTML = '';
+  for (let i = 0; i < history.length; i += 2){
+    const li = document.createElement('li');
+    const num = document.createElement('span');
+    num.className = 'mv-num';
+    num.textContent = (i/2 + 1) + '.';
+    const w = document.createElement('span');
+    w.className = 'mv-w';
+    w.textContent = history[i] || '';
+    const b = document.createElement('span');
+    b.className = 'mv-b';
+    b.textContent = history[i+1] || '';
+    li.appendChild(num); li.appendChild(w); li.appendChild(b);
+    moveListEl.appendChild(li);
+  }
+  moveListEl.scrollTop = moveListEl.scrollHeight;
+}
+
+function renderCaptured(){
+  const history = game.history({ verbose: true });
+  const byWhite = [];
+  const byBlack = [];
+  history.forEach(m => {
+    if (m.captured){
+      if (m.color === 'w') byWhite.push(PIECE_UNICODE['b'][m.captured]);
+      else byBlack.push(PIECE_UNICODE['w'][m.captured]);
+    }
+  });
+  capturedByWhiteEl.textContent = byWhite.join(' ');
+  capturedByBlackEl.textContent = byBlack.join(' ');
+}
+
+function updateStatus(){
+  statusEl.classList.remove('active','over');
+  if (game.in_checkmate()){
+    const winner = game.turn() === 'w' ? 'Black' : 'White';
+    statusEl.textContent = 'Checkmate — ' + winner + ' wins.';
+    statusEl.classList.add('over');
+    gameOver = true;
+    return;
+  }
+  if (game.in_stalemate()){
+    statusEl.textContent = 'Stalemate — draw.';
+    statusEl.classList.add('over'); gameOver = true; return;
+  }
+  if (game.in_threefold_repetition()){
+    statusEl.textContent = 'Draw by threefold repetition.';
+    statusEl.classList.add('over'); gameOver = true; return;
+  }
+  if (game.insufficient_material()){
+    statusEl.textContent = 'Draw — insufficient material.';
+    statusEl.classList.add('over'); gameOver = true; return;
+  }
+  if (game.in_draw()){
+    statusEl.textContent = 'Draw.';
+    statusEl.classList.add('over'); gameOver = true; return;
+  }
+  gameOver = false;
+  if (thinking){
+    statusEl.textContent = 'Opponent is thinking…';
+    statusEl.classList.add('active');
+    return;
+  }
+  const turn = game.turn() === 'w' ? 'White' : 'Black';
+  const isHumanTurn = game.turn() === humanColor;
+  let text = turn + ' to move' + (isHumanTurn ? ' — your move' : ' — opponents move');
+  if (game.in_check()) text += ' (in check)';
+  statusEl.textContent = text;
+  if (isHumanTurn) statusEl.classList.add('active');
+}
+
+/* ---------------------------------------------------------
+   Interaction
+--------------------------------------------------------- */
+function onSquareClick(square){
+  if (gameOver || thinking) return;
+  if (game.turn() !== humanColor) return;
+
+  hintMove = null; hintBanner.classList.remove('show');
+
+  const piece = game.get(square);
+
+  if (selectedSquare){
+    const target = legalTargets.find(t => t.to === square);
+    if (target){
+      playHumanMove(selectedSquare, square);
+      selectedSquare = null; legalTargets = [];
+      return;
+    }
+    if (piece && piece.color === humanColor){
+      selectSquare(square);
+      return;
+    }
+    selectedSquare = null; legalTargets = [];
+    render();
+    return;
+  }
+
+  if (piece && piece.color === humanColor){
+    selectSquare(square);
+  }
+}
+
+function selectSquare(square){
+  selectedSquare = square;
+  legalTargets = game.moves({ square, verbose: true }).map(m => ({ to: m.to, captured: !!m.captured }));
+  render();
+}
+
+function playHumanMove(from, to){
+  const moves = game.moves({ square: from, verbose: true });
+  const moveInfo = moves.find(m => m.to === to);
+  const needsPromotion = moveInfo && moveInfo.flags.includes('p');
+
+  if (needsPromotion){
+    askPromotion(promotion => {
+      finalizeMove(from, to, promotion);
+    });
+  } else {
+    finalizeMove(from, to, undefined);
+  }
+}
+
+function finalizeMove(from, to, promotion){
+  const move = game.move({ from, to, promotion: promotion || 'q' });
+  if (!move) return;
+  lastMove = { from: move.from, to: move.to };
+  render();
+  if (!gameOver && game.turn() !== humanColor){
+    triggerComputerMove();
+  }
+}
+
+function askPromotion(callback){
+  promoChoices.innerHTML = '';
+  const pieces = ['q','r','b','n'];
+  pieces.forEach(p => {
+    const btn = document.createElement('button');
+    btn.textContent = PIECE_UNICODE[humanColor][p];
+    btn.addEventListener('click', () => {
+      promoModal.classList.add('hidden');
+      callback(p);
+    });
+    promoChoices.appendChild(btn);
+  });
+  promoModal.classList.remove('hidden');
+}
+
+function triggerComputerMove(){
+  thinking = true;
+  updateStatus();
+  setDisabled(true);
+  setTimeout(() => {
+    const depth = parseInt(difficultySel.value, 10);
+    const result = findBestMove(game, depth);
+    if (result.move){
+      const move = game.move(result.move.san);
+      lastMove = { from: move.from, to: move.to };
+    }
+    thinking = false;
+    setDisabled(false);
+    render();
+  }, 50);
+}
+
+function setDisabled(disabled){
+  newGameBtn.disabled = disabled;
+  undoBtn.disabled = disabled;
+  hintBtn.disabled = disabled;
+  difficultySel.disabled = disabled;
+}
+
+/* ---------------------------------------------------------
+   Controls
+--------------------------------------------------------- */
+document.querySelectorAll('.side-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.side-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    humanColor = btn.dataset.side;
+    startNewGame();
+  });
+});
+
+newGameBtn.addEventListener('click', startNewGame);
+
+undoBtn.addEventListener('click', () => {
+  if (thinking) return;
+  // undo computer's move and human's move (one full round), if present
+  const hist = game.history();
+  if (hist.length === 0) return;
+  game.undo();
+  if (game.history().length > 0 && game.turn() !== humanColor){
+    game.undo();
+  }
+  selectedSquare = null; legalTargets = []; hintMove = null;
+  hintBanner.classList.remove('show');
+  const h = game.history({ verbose: true });
+  lastMove = h.length ? { from: h[h.length-1].from, to: h[h.length-1].to } : null;
+  gameOver = false;
+  render();
+});
+
+hintBtn.addEventListener('click', () => {
+  if (thinking || gameOver) return;
+  if (game.turn() !== humanColor){
+    hintBanner.textContent = 'Wait for your turn to ask for a hint.';
+    hintBanner.classList.add('show');
+    return;
+  }
+  hintBanner.textContent = 'Calculating…';
+  hintBanner.classList.add('show');
+  setDisabled(true);
+  setTimeout(() => {
+    const depth = Math.max(2, parseInt(difficultySel.value, 10));
+    const result = findBestMove(game, depth);
+    setDisabled(false);
+    if (result.move){
+      hintMove = { from: result.move.from, to: result.move.to };
+      hintBanner.textContent = 'Suggested move: ' + result.move.san + ' (from ' + result.move.from + ' to ' + result.move.to + ')';
+    } else {
+      hintBanner.textContent = 'No move available.';
+    }
+    render();
+  }, 50);
+});
+
+function startNewGame(){
+  game.reset();
+  selectedSquare = null;
+  legalTargets = [];
+  lastMove = null;
+  hintMove = null;
+  thinking = false;
+  gameOver = false;
+  hintBanner.classList.remove('show');
+  buildLabels();
+  render();
+  if (humanColor === 'b'){
+    triggerComputerMove();
+  }
+}
+
+/* ---------------------------------------------------------
+   Init
+--------------------------------------------------------- */
+buildLabels();
+render();
+</script>
+</body>
+</html>
