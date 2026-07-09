@@ -369,6 +369,7 @@
       <section class="control-group buttons-row">
         <button class="btn" id="newGameBtn">↺ New Game</button>
         <button class="btn" id="undoBtn">⤺ Undo my last move</button>
+        <button class="btn" id="rotateBtn">⇅ Rotate Board</button>
         <button class="btn primary" id="hintBtn">◆ Hint (minimax suggestion)</button>
       </section>
 
@@ -529,6 +530,7 @@ function findBestMove(game, depth){
 --------------------------------------------------------- */
 const game = new Chess();
 let humanColor = 'w';
+let boardFlipped = false;
 let selectedSquare = null;
 let legalTargets = [];
 let lastMove = null;
@@ -550,8 +552,14 @@ const promoModal = document.getElementById('promoModal');
 const promoChoices = document.getElementById('promoChoices');
 const fileLabels = document.getElementById('fileLabels');
 const rankLabels = document.getElementById('rankLabels');
+const rotateBtn = document.getElementById('rotateBtn');
 
 const FILES = ['a','b','c','d','e','f','g','h'];
+
+function getViewColor(){
+  if (!boardFlipped) return humanColor;
+  return humanColor === 'w' ? 'b' : 'w';
+}
 
 function squareName(row, col){
   // row/col are in "white-orientation" board() indices: row0 = rank8
@@ -561,8 +569,9 @@ function squareName(row, col){
 function buildLabels(){
   fileLabels.innerHTML = '';
   rankLabels.innerHTML = '';
-  const files = humanColor === 'w' ? FILES : FILES.slice().reverse();
-  const ranks = humanColor === 'w' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const vc = getViewColor();
+  const files = vc === 'w' ? FILES : FILES.slice().reverse();
+  const ranks = vc === 'w' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
   files.forEach(f => {
     const s = document.createElement('span');
     s.textContent = f;
@@ -578,8 +587,9 @@ function buildLabels(){
 function render(){
   boardEl.innerHTML = '';
   const board = game.board();
-  const rowOrder = humanColor === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
-  const colOrder = humanColor === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
+  const vc = getViewColor();
+  const rowOrder = vc === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
+  const colOrder = vc === 'w' ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
 
   const kingInCheckSquare = getCheckedKingSquare();
 
@@ -822,6 +832,12 @@ document.querySelectorAll('.side-btn').forEach(btn => {
 });
 
 newGameBtn.addEventListener('click', startNewGame);
+
+rotateBtn.addEventListener('click', () => {
+  boardFlipped = !boardFlipped;
+  buildLabels();
+  render();
+});
 
 undoBtn.addEventListener('click', () => {
   if (thinking) return;
