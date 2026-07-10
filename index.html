@@ -21,6 +21,8 @@
     --gold-dim: #8a713a;
     --teal: #4fb3a9;
     --danger: #b5544a;
+    --ai-from: #4fb3a9;
+    --ai-to: #ffcf66;
     --radius: 10px;
     --shadow: 0 8px 24px rgba(0,0,0,0.35);
   }
@@ -135,8 +137,32 @@
 
   .sq.selected{ background-color:var(--gold) !important; }
   .sq.last-from, .sq.last-to{ box-shadow:inset 0 0 0 3px rgba(201,162,77,0.55); }
+  .sq.ai-from, .sq.ai-to{
+    z-index:1;
+    box-shadow:inset 0 0 0 3px rgba(0,0,0,0.25);
+  }
+  .sq.ai-from{
+    background-image:radial-gradient(circle at center, rgba(79,179,169,0.32) 0%, rgba(79,179,169,0.08) 72%, transparent 100%);
+    box-shadow:
+      inset 0 0 0 5px var(--ai-from),
+      0 0 0 3px rgba(79,179,169,0.65),
+      0 0 14px rgba(79,179,169,0.5);
+  }
+  .sq.ai-to{
+    background-image:radial-gradient(circle at center, rgba(255,207,102,0.36) 0%, rgba(255,207,102,0.1) 70%, transparent 100%);
+    box-shadow:
+      inset 0 0 0 6px var(--ai-to),
+      0 0 0 3px rgba(255,207,102,0.78),
+      0 0 18px rgba(255,207,102,0.62);
+    animation:aiPulse 1.2s ease-in-out infinite;
+  }
   .sq.hint-from, .sq.hint-to{ box-shadow:inset 0 0 0 3px var(--teal); }
   .sq.in-check{ background-color:var(--danger) !important; }
+
+  @keyframes aiPulse{
+    0%, 100%{ filter:brightness(1); }
+    50%{ filter:brightness(1.14); }
+  }
 
   .move-dot::after{
     content:'';
@@ -535,6 +561,7 @@ let boardFlipped = false;
 let selectedSquare = null;
 let legalTargets = [];
 let lastMove = null;
+let lastMover = null;
 let hintMove = null;
 let thinking = false;
 let gameOver = false;
@@ -603,8 +630,8 @@ function render(){
       sq.dataset.square = name;
 
       if (selectedSquare === name) sq.classList.add('selected');
-      if (lastMove && (lastMove.from === name)) sq.classList.add('last-from');
-      if (lastMove && (lastMove.to === name)) sq.classList.add('last-to');
+      if (lastMove && (lastMove.from === name)) sq.classList.add(lastMover === 'ai' ? 'ai-from' : 'last-from');
+      if (lastMove && (lastMove.to === name)) sq.classList.add(lastMover === 'ai' ? 'ai-to' : 'last-to');
       if (hintMove && hintMove.from === name) sq.classList.add('hint-from');
       if (hintMove && hintMove.to === name) sq.classList.add('hint-to');
       if (kingInCheckSquare === name) sq.classList.add('in-check');
@@ -775,6 +802,7 @@ function finalizeMove(from, to, promotion){
   const move = game.move({ from, to, promotion: promotion || 'q' });
   if (!move) return;
   lastMove = { from: move.from, to: move.to };
+  lastMover = 'human';
   render();
   if (!gameOver && game.turn() !== humanColor){
     triggerComputerMove();
@@ -806,6 +834,7 @@ function triggerComputerMove(){
     if (result.move){
       const move = game.move(result.move.san);
       lastMove = { from: move.from, to: move.to };
+      lastMover = 'ai';
     }
     thinking = false;
     setDisabled(false);
@@ -853,6 +882,7 @@ undoBtn.addEventListener('click', () => {
   hintBanner.classList.remove('show');
   const h = game.history({ verbose: true });
   lastMove = h.length ? { from: h[h.length-1].from, to: h[h.length-1].to } : null;
+  lastMover = h.length ? (h[h.length-1].color === humanColor ? 'human' : 'ai') : null;
   gameOver = false;
   render();
 });
@@ -886,6 +916,7 @@ function startNewGame(){
   selectedSquare = null;
   legalTargets = [];
   lastMove = null;
+  lastMover = null;
   hintMove = null;
   thinking = false;
   gameOver = false;
