@@ -388,7 +388,6 @@
           <option value="2">Easy — thinks 2 moves ahead</option>
           <option value="3" selected>Medium — thinks 3 moves ahead</option>
           <option value="4">Hard — thinks 4 moves ahead</option>
-          <option value="5">Expert — thinks 5 moves ahead (slowest)</option>
         </select>
         <div class="difficulty-note">Higher levels search more positions and take longer to move.</div>
       </section>
@@ -505,6 +504,8 @@ function evaluateBoard(game){
   if (game.in_draw() || game.in_stalemate() || game.in_threefold_repetition() || game.insufficient_material()) return 0;
   const board = game.board();
   let score = 0;
+  const wPawnFiles = [], bPawnFiles = [];
+  let wBishops = 0, bBishops = 0;
   for (let r = 0; r < 8; r++){
     for (let c = 0; c < 8; c++){
       const piece = board[r][c];
@@ -512,8 +513,26 @@ function evaluateBoard(game){
       const pst = piece.color === 'w' ? PST[piece.type][r][c] : PST[piece.type][7-r][c];
       const val = VALUES[piece.type] + pst;
       score += piece.color === 'w' ? val : -val;
+      if (piece.type === 'p'){ piece.color === 'w' ? wPawnFiles.push(c) : bPawnFiles.push(c); }
+      if (piece.type === 'b'){ piece.color === 'w' ? wBishops++ : bBishops++; }
     }
   }
+  // Bishop pair bonus
+  if (wBishops >= 2) score += 30;
+  if (bBishops >= 2) score -= 30;
+  // Pawn structure penalties (doubled + isolated)
+  const pawnPenalties = (files) => {
+    const counts = {};
+    files.forEach(c => counts[c] = (counts[c]||0)+1);
+    let pen = 0;
+    for (const [c,n] of Object.entries(counts)){
+      if (n > 1) pen += 20*(n-1);
+      if (!counts[+c-1] && !counts[+c+1]) pen += 15;
+    }
+    return pen;
+  };
+  score -= pawnPenalties(wPawnFiles);
+  score += pawnPenalties(bPawnFiles);
   return score;
 }
 
@@ -521,9 +540,37 @@ function orderMoves(moves){
   return moves.slice().sort((a,b) => (b.captured ? VALUES[b.captured] : 0) - (a.captured ? VALUES[a.captured] : 0));
 }
 
+// Quiescence search: extends depth-0 nodes by searching captures until quiet,
+// eliminating the horizon effect where the AI misses captures just past its limit.
+function quiescence(game, alpha, beta, maximizing){
+  if (game.game_over()) return evaluateBoard(game);
+  const standPat = evaluateBoard(game);
+  if (maximizing){
+    if (standPat >= beta) return beta;
+    if (standPat > alpha) alpha = standPat;
+  } else {
+    if (standPat <= alpha) return alpha;
+    if (standPat < beta) beta = standPat;
+  }
+  const captures = orderMoves(game.moves({ verbose: true }).filter(m => m.captured));
+  for (const m of captures){
+    game.move(m.san);
+    const score = quiescence(game, alpha, beta, !maximizing);
+    game.undo();
+    if (maximizing){
+      if (score >= beta) return beta;
+      if (score > alpha) alpha = score;
+    } else {
+      if (score <= alpha) return alpha;
+      if (score < beta) beta = score;
+    }
+  }
+  return maximizing ? alpha : beta;
+}
+
 function minimax(game, depth, alpha, beta, maximizing){
   if (depth === 0 || game.game_over()){
-    return { score: evaluateBoard(game), move: null };
+    return { score: quiescence(game, alpha, beta, maximizing), move: null };
   }
   const moves = orderMoves(game.moves({ verbose: true }));
   let best = maximizing ? -Infinity : Infinity;
