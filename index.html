@@ -132,7 +132,7 @@
     transform:translateY(-2px);
     pointer-events:none;
   }
-  .sq .piece.white-piece{ color:#faf6ea; -webkit-text-stroke:1px #4a4632; }
+  .sq .piece.white-piece{ color:#ffffff; -webkit-text-stroke:0; }
   .sq .piece.black-piece{ color:#1c1a15; }
 
   .sq.selected{ background-color:var(--gold) !important; }
@@ -500,21 +500,6 @@ const PIECE_UNICODE = {
   b:{ p:'♟', n:'♞', b:'♝', r:'♜', q:'♛', k:'♚' }
 };
 
-// Tiny opening book: strong, instant early-game choices to improve speed and play quality.
-const OPENING_BOOK = {
-  '': ['e4','d4','Nf3','c4'],
-  'e4': ['c5','e5','e6','c6'],
-  'd4': ['d5','Nf6'],
-  'Nf3': ['d5','Nf6'],
-  'c4': ['e5','Nf6'],
-  'e4 e5': ['Nf3','Bc4','Nc3'],
-  'e4 c5': ['Nf3','d4','Nc3'],
-  'd4 d5': ['c4','Nf3','Bf4'],
-  'd4 Nf6': ['c4','Nf3','g3'],
-  'Nf3 d5': ['d4','g3','c4'],
-  'Nf3 Nf6': ['d4','c4','g3']
-};
-
 function evaluateBoard(game){
   if (game.in_checkmate()) return game.turn() === 'w' ? -100000 : 100000;
   if (game.in_draw() || game.in_stalemate() || game.in_threefold_repetition() || game.insufficient_material()) return 0;
@@ -533,16 +518,7 @@ function evaluateBoard(game){
 }
 
 function orderMoves(moves){
-  const scoreMove = (m) => {
-    let score = 0;
-    // MVV-LVA capture ordering: prioritize winning exchanges first.
-    if (m.captured) score += (10 * VALUES[m.captured]) - (VALUES[m.piece] || 0);
-    if (m.promotion) score += (VALUES[m.promotion] || 0) + 800;
-    if (m.flags && m.flags.includes('e')) score += 40;
-    if (m.flags && (m.flags.includes('k') || m.flags.includes('q'))) score += 30;
-    return score;
-  };
-  return moves.slice().sort((a,b) => scoreMove(b) - scoreMove(a));
+  return moves.slice().sort((a,b) => (b.captured ? VALUES[b.captured] : 0) - (a.captured ? VALUES[a.captured] : 0));
 }
 
 function minimax(game, depth, alpha, beta, maximizing){
@@ -572,15 +548,6 @@ function minimax(game, depth, alpha, beta, maximizing){
 }
 
 function findBestMove(game, depth){
-  const historyKey = game.history().join(' ');
-  const bookLine = OPENING_BOOK[historyKey];
-  if (bookLine && game.history().length <= 10){
-    const legal = game.moves({ verbose: true });
-    const bookMoves = legal.filter(m => bookLine.includes(m.san));
-    if (bookMoves.length){
-      return { score: 0, move: bookMoves[Math.floor(Math.random() * bookMoves.length)] };
-    }
-  }
   const maximizing = game.turn() === 'w';
   return minimax(game, depth, -Infinity, Infinity, maximizing);
 }
