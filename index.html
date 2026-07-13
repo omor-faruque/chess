@@ -132,7 +132,7 @@
     transform:translateY(-2px);
     pointer-events:none;
   }
-  .sq .piece.white-piece{ color:#ffffff; -webkit-text-stroke:0; }
+  .sq .piece.white-piece{ color:#faf6ea; -webkit-text-stroke:1px #4a4632; }
   .sq .piece.black-piece{ color:#1c1a15; }
 
   .sq.selected{ background-color:var(--gold) !important; }
@@ -500,116 +500,11 @@ const PIECE_UNICODE = {
   b:{ p:'♟', n:'♞', b:'♝', r:'♜', q:'♛', k:'♚' }
 };
 
-const OPENING_BOOK = {
-  '': ['e4', 'd4', 'Nf3', 'c4'],
-  'e4': ['e5', 'c5', 'e6', 'c6'],
-  'd4': ['d5', 'Nf6'],
-  'Nf3': ['d5', 'Nf6'],
-  'c4': ['e5', 'Nf6'],
-  'e4 e5': ['Nf3', 'Bc4', 'Nc3'],
-  'e4 c5': ['Nf3', 'd4', 'Nc3'],
-  'd4 d5': ['c4', 'Nf3', 'Bf4'],
-  'd4 Nf6': ['c4', 'Nf3', 'g3']
-};
-
-const SEARCH_TIMEOUT = Symbol('search-timeout');
-const TRANSPOSITION_TABLE = new Map();
-const HISTORY_HEURISTIC = new Map();
-const KILLER_MOVES = Array.from({ length: 64 }, () => []);
-const MAX_TT_ENTRIES = 25000;
-
-function moveKey(move){
-  return move.from + move.to + (move.promotion || '');
-}
-
-function getSearchLimitMs(depth, isHint){
-  const base = { 2: 120, 3: 260, 4: 700, 5: 1200 }[depth] || 400;
-  return isHint ? base + 250 : base;
-}
-
-function ensureTime(state){
-  if (performance.now() - state.start > state.limitMs) {
-    throw SEARCH_TIMEOUT;
-  }
-}
-
-function trackHistory(move, depth){
-  const key = moveKey(move);
-  HISTORY_HEURISTIC.set(key, (HISTORY_HEURISTIC.get(key) || 0) + depth * depth);
-}
-
-function rememberKiller(ply, move){
-  const key = moveKey(move);
-  const killers = KILLER_MOVES[ply];
-  if (killers[0] === key) return;
-  killers.unshift(key);
-  killers.length = Math.min(killers.length, 2);
-}
-
-function setTT(key, entry){
-  if (TRANSPOSITION_TABLE.size >= MAX_TT_ENTRIES) TRANSPOSITION_TABLE.clear();
-  TRANSPOSITION_TABLE.set(key, entry);
-}
-
-function pawnStructureScore(whitePawns, blackPawns){
-  const fileCounts = (pawns) => {
-    const counts = Array(8).fill(0);
-    pawns.forEach(pawn => counts[pawn.c]++);
-    return counts;
-  };
-  const whiteFiles = fileCounts(whitePawns);
-  const blackFiles = fileCounts(blackPawns);
-
-  function scoreSide(pawns, ownFiles, oppPawns, isWhite){
-    let score = 0;
-    for (const pawn of pawns){
-      const file = pawn.c;
-      if (ownFiles[file] > 1) score -= 14 * (ownFiles[file] - 1);
-      if (!ownFiles[file - 1] && !ownFiles[file + 1]) score -= 12;
-
-      const passed = !oppPawns.some(other => {
-        if (Math.abs(other.c - file) > 1) return false;
-        return isWhite ? other.r < pawn.r : other.r > pawn.r;
-      });
-      if (passed) {
-        const advancement = isWhite ? 6 - pawn.r : pawn.r - 1;
-        score += 18 + advancement * 6;
-      }
-    }
-    return score;
-  }
-
-  return scoreSide(whitePawns, whiteFiles, blackPawns, true) - scoreSide(blackPawns, blackFiles, whitePawns, false);
-}
-
-function rookFileScore(whiteRooks, blackRooks, whitePawns, blackPawns){
-  const whiteFiles = new Set(whitePawns.map(p => p.c));
-  const blackFiles = new Set(blackPawns.map(p => p.c));
-  let score = 0;
-
-  whiteRooks.forEach(rook => {
-    if (!whiteFiles.has(rook.c)) score += 10;
-    if (!whiteFiles.has(rook.c) && !blackFiles.has(rook.c)) score += 12;
-  });
-  blackRooks.forEach(rook => {
-    if (!blackFiles.has(rook.c)) score -= 10;
-    if (!blackFiles.has(rook.c) && !whiteFiles.has(rook.c)) score -= 12;
-  });
-
-  return score;
-}
-
 function evaluateBoard(game){
   if (game.in_checkmate()) return game.turn() === 'w' ? -100000 : 100000;
   if (game.in_draw() || game.in_stalemate() || game.in_threefold_repetition() || game.insufficient_material()) return 0;
   const board = game.board();
   let score = 0;
-  const whitePawns = [];
-  const blackPawns = [];
-  const whiteRooks = [];
-  const blackRooks = [];
-  let whiteBishops = 0;
-  let blackBishops = 0;
   for (let r = 0; r < 8; r++){
     for (let c = 0; c < 8; c++){
       const piece = board[r][c];
@@ -617,98 +512,25 @@ function evaluateBoard(game){
       const pst = piece.color === 'w' ? PST[piece.type][r][c] : PST[piece.type][7-r][c];
       const val = VALUES[piece.type] + pst;
       score += piece.color === 'w' ? val : -val;
-      if (piece.type === 'p') {
-        (piece.color === 'w' ? whitePawns : blackPawns).push({ r, c });
-      } else if (piece.type === 'r') {
-        (piece.color === 'w' ? whiteRooks : blackRooks).push({ r, c });
-      } else if (piece.type === 'b') {
-        if (piece.color === 'w') whiteBishops++;
-        else blackBishops++;
-      }
     }
   }
-  if (whiteBishops >= 2) score += 28;
-  if (blackBishops >= 2) score -= 28;
-  score += pawnStructureScore(whitePawns, blackPawns);
-  score += rookFileScore(whiteRooks, blackRooks, whitePawns, blackPawns);
-  score += game.turn() === 'w' ? 8 : -8;
   return score;
 }
 
-function orderMoves(moves, ply, ttMove){
-  const killers = KILLER_MOVES[ply] || [];
-  const ttKey = ttMove ? moveKey(ttMove) : null;
-  const scoreMove = (move) => {
-    const key = moveKey(move);
-    let score = HISTORY_HEURISTIC.get(key) || 0;
-    if (ttKey && key === ttKey) score += 1000000;
-    if (move.captured) score += 100000 + (10 * VALUES[move.captured]) - (VALUES[move.piece] || 0);
-    if (move.promotion) score += 90000 + (VALUES[move.promotion] || 0);
-    if (killers[0] === key) score += 80000;
-    else if (killers[1] === key) score += 70000;
-    if (move.flags && (move.flags.includes('k') || move.flags.includes('q'))) score += 50;
-    return score;
-  };
-  return moves.slice().sort((a,b) => scoreMove(b) - scoreMove(a));
+function orderMoves(moves){
+  return moves.slice().sort((a,b) => (b.captured ? VALUES[b.captured] : 0) - (a.captured ? VALUES[a.captured] : 0));
 }
 
-function quiescence(game, alpha, beta, maximizing, state, ply){
-  ensureTime(state);
-  const standPat = evaluateBoard(game);
-  if (maximizing){
-    if (standPat >= beta) return beta;
-    if (standPat > alpha) alpha = standPat;
-  } else {
-    if (standPat <= alpha) return alpha;
-    if (standPat < beta) beta = standPat;
-  }
-
-  const captures = orderMoves(
-    game.moves({ verbose: true }).filter(move => move.captured || move.promotion),
-    ply,
-    null
-  );
-
-  for (const move of captures){
-    game.move(move.san);
-    const score = quiescence(game, alpha, beta, !maximizing, state, ply + 1);
-    game.undo();
-
-    if (maximizing){
-      if (score >= beta) return beta;
-      if (score > alpha) alpha = score;
-    } else {
-      if (score <= alpha) return alpha;
-      if (score < beta) beta = score;
-    }
-  }
-
-  return maximizing ? alpha : beta;
-}
-
-function minimax(game, depth, alpha, beta, maximizing, state, ply = 0){
-  ensureTime(state);
-  const alphaOrig = alpha;
-  const betaOrig = beta;
-  const fen = game.fen();
-  const ttEntry = TRANSPOSITION_TABLE.get(fen);
-
-  if (ttEntry && ttEntry.depth >= depth){
-    if (ttEntry.flag === 'exact') return { score: ttEntry.score, move: ttEntry.move };
-    if (ttEntry.flag === 'lower') alpha = Math.max(alpha, ttEntry.score);
-    if (ttEntry.flag === 'upper') beta = Math.min(beta, ttEntry.score);
-    if (alpha >= beta) return { score: ttEntry.score, move: ttEntry.move };
-  }
-
+function minimax(game, depth, alpha, beta, maximizing){
   if (depth === 0 || game.game_over()){
-    return { score: quiescence(game, alpha, beta, maximizing, state, ply), move: null };
+    return { score: evaluateBoard(game), move: null };
   }
-  const moves = orderMoves(game.moves({ verbose: true }), ply, ttEntry && ttEntry.move);
+  const moves = orderMoves(game.moves({ verbose: true }));
   let best = maximizing ? -Infinity : Infinity;
   const bestMoves = [];
   for (const m of moves){
     game.move(m.san);
-    const result = minimax(game, depth - 1, alpha, beta, !maximizing, state, ply + 1).score;
+    const result = minimax(game, depth - 1, alpha, beta, !maximizing).score;
     game.undo();
     if (maximizing){
       if (result > best){ best = result; bestMoves.length = 0; bestMoves.push(m); }
@@ -719,61 +541,15 @@ function minimax(game, depth, alpha, beta, maximizing, state, ply = 0){
       else if (result === best){ bestMoves.push(m); }
       beta = Math.min(beta, result);
     }
-    if (beta <= alpha) {
-      if (!m.captured) {
-        rememberKiller(ply, m);
-        trackHistory(m, depth);
-      }
-      break;
-    }
+    if (beta <= alpha) break;
   }
   const chosen = bestMoves.length ? bestMoves[Math.floor(Math.random() * bestMoves.length)] : moves[0];
-
-  let flag = 'exact';
-  if (best <= alphaOrig) flag = 'upper';
-  else if (best >= betaOrig) flag = 'lower';
-  setTT(fen, { depth, score: best, flag, move: chosen });
-
   return { score: best, move: chosen };
 }
 
-function findBestMove(game, depth, isHint = false){
-  const bookMoves = OPENING_BOOK[game.history().join(' ')];
-  if (bookMoves && game.history().length <= 8){
-    const legalMoves = game.moves({ verbose: true });
-    const candidates = legalMoves.filter(move => bookMoves.includes(move.san));
-    if (candidates.length) {
-      return { score: 0, move: candidates[Math.floor(Math.random() * candidates.length)] };
-    }
-  }
-
+function findBestMove(game, depth){
   const maximizing = game.turn() === 'w';
-  const state = {
-    start: performance.now(),
-    limitMs: getSearchLimitMs(depth, isHint)
-  };
-
-  let bestResult = null;
-  for (let currentDepth = 1; currentDepth <= depth; currentDepth++){
-    try {
-      const result = minimax(game, currentDepth, -Infinity, Infinity, maximizing, state, 0);
-      if (result.move) bestResult = result;
-    } catch (error) {
-      if (error === SEARCH_TIMEOUT) break;
-      throw error;
-    }
-  }
-
-  if (bestResult) return bestResult;
-  const legalMoves = game.moves({ verbose: true });
-  return { score: evaluateBoard(game), move: legalMoves[0] || null };
-}
-function chooseEngineMove(game, isHint = false){
-  const depth = parseInt(difficultySel.value, 10);
-  const result = findBestMove(game, depth, isHint);
-  return Promise.resolve(
-    result.move ? { from: result.move.from, to: result.move.to, promotion: result.move.promotion } : null
-  );
+  return minimax(game, depth, -Infinity, Infinity, maximizing);
 }
 
 /* ---------------------------------------------------------
@@ -1052,10 +828,11 @@ function triggerComputerMove(){
   thinking = true;
   updateStatus();
   setDisabled(true);
-  setTimeout(async () => {
-    const result = await chooseEngineMove(game);
-    if (result){
-      const move = game.move({ from: result.from, to: result.to, promotion: result.promotion || 'q' });
+  setTimeout(() => {
+    const depth = parseInt(difficultySel.value, 10);
+    const result = findBestMove(game, depth);
+    if (result.move){
+      const move = game.move(result.move.san);
       lastMove = { from: move.from, to: move.to };
       lastMover = 'ai';
     }
@@ -1120,12 +897,13 @@ hintBtn.addEventListener('click', () => {
   hintBanner.textContent = 'Calculating…';
   hintBanner.classList.add('show');
   setDisabled(true);
-  setTimeout(async () => {
-    const result = await chooseEngineMove(game);
+  setTimeout(() => {
+    const depth = Math.max(2, parseInt(difficultySel.value, 10));
+    const result = findBestMove(game, depth);
     setDisabled(false);
-    if (result){
-      hintMove = { from: result.from, to: result.to };
-      hintBanner.textContent = 'Suggested move: ' + result.from + ' to ' + result.to + (result.promotion ? ' promoting to ' + result.promotion : '');
+    if (result.move){
+      hintMove = { from: result.move.from, to: result.move.to };
+      hintBanner.textContent = 'Suggested move: ' + result.move.san + ' (from ' + result.move.from + ' to ' + result.move.to + ')';
     } else {
       hintBanner.textContent = 'No move available.';
     }
