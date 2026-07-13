@@ -388,6 +388,7 @@
           <option value="2">Easy — thinks 2 moves ahead</option>
           <option value="3" selected>Medium — thinks 3 moves ahead</option>
           <option value="4">Hard — thinks 4 moves ahead</option>
+          <option value="5">Expert — thinks 5 moves ahead (slowest)</option>
         </select>
         <div class="difficulty-note">Higher levels search more positions and take longer to move.</div>
       </section>
@@ -499,13 +500,26 @@ const PIECE_UNICODE = {
   b:{ p:'♟', n:'♞', b:'♝', r:'♜', q:'♛', k:'♚' }
 };
 
+// Tiny opening book: strong, instant early-game choices to improve speed and play quality.
+const OPENING_BOOK = {
+  '': ['e4','d4','Nf3','c4'],
+  'e4': ['c5','e5','e6','c6'],
+  'd4': ['d5','Nf6'],
+  'Nf3': ['d5','Nf6'],
+  'c4': ['e5','Nf6'],
+  'e4 e5': ['Nf3','Bc4','Nc3'],
+  'e4 c5': ['Nf3','d4','Nc3'],
+  'd4 d5': ['c4','Nf3','Bf4'],
+  'd4 Nf6': ['c4','Nf3','g3'],
+  'Nf3 d5': ['d4','g3','c4'],
+  'Nf3 Nf6': ['d4','c4','g3']
+};
+
 function evaluateBoard(game){
   if (game.in_checkmate()) return game.turn() === 'w' ? -100000 : 100000;
   if (game.in_draw() || game.in_stalemate() || game.in_threefold_repetition() || game.insufficient_material()) return 0;
   const board = game.board();
   let score = 0;
-  const wPawnFiles = [], bPawnFiles = [];
-  let wBishops = 0, bBishops = 0;
   for (let r = 0; r < 8; r++){
     for (let c = 0; c < 8; c++){
       const piece = board[r][c];
@@ -513,64 +527,27 @@ function evaluateBoard(game){
       const pst = piece.color === 'w' ? PST[piece.type][r][c] : PST[piece.type][7-r][c];
       const val = VALUES[piece.type] + pst;
       score += piece.color === 'w' ? val : -val;
-      if (piece.type === 'p'){ piece.color === 'w' ? wPawnFiles.push(c) : bPawnFiles.push(c); }
-      if (piece.type === 'b'){ piece.color === 'w' ? wBishops++ : bBishops++; }
     }
   }
-  // Bishop pair bonus
-  if (wBishops >= 2) score += 30;
-  if (bBishops >= 2) score -= 30;
-  // Pawn structure penalties (doubled + isolated)
-  const pawnPenalties = (files) => {
-    const counts = {};
-    files.forEach(c => counts[c] = (counts[c]||0)+1);
-    let pen = 0;
-    for (const [c,n] of Object.entries(counts)){
-      if (n > 1) pen += 20*(n-1);
-      if (!counts[+c-1] && !counts[+c+1]) pen += 15;
-    }
-    return pen;
-  };
-  score -= pawnPenalties(wPawnFiles);
-  score += pawnPenalties(bPawnFiles);
   return score;
 }
 
 function orderMoves(moves){
-  return moves.slice().sort((a,b) => (b.captured ? VALUES[b.captured] : 0) - (a.captured ? VALUES[a.captured] : 0));
-}
-
-// Quiescence search: extends depth-0 nodes by searching captures until quiet,
-// eliminating the horizon effect where the AI misses captures just past its limit.
-function quiescence(game, alpha, beta, maximizing){
-  if (game.game_over()) return evaluateBoard(game);
-  const standPat = evaluateBoard(game);
-  if (maximizing){
-    if (standPat >= beta) return beta;
-    if (standPat > alpha) alpha = standPat;
-  } else {
-    if (standPat <= alpha) return alpha;
-    if (standPat < beta) beta = standPat;
-  }
-  const captures = orderMoves(game.moves({ verbose: true }).filter(m => m.captured));
-  for (const m of captures){
-    game.move(m.san);
-    const score = quiescence(game, alpha, beta, !maximizing);
-    game.undo();
-    if (maximizing){
-      if (score >= beta) return beta;
-      if (score > alpha) alpha = score;
-    } else {
-      if (score <= alpha) return alpha;
-      if (score < beta) beta = score;
-    }
-  }
-  return maximizing ? alpha : beta;
+  const scoreMove = (m) => {
+    let score = 0;
+    // MVV-LVA capture ordering: prioritize winning exchanges first.
+    if (m.captured) score += (10 * VALUES[m.captured]) - (VALUES[m.piece] || 0);
+    if (m.promotion) score += (VALUES[m.promotion] || 0) + 800;
+    if (m.flags && m.flags.includes('e')) score += 40;
+    if (m.flags && (m.flags.includes('k') || m.flags.includes('q'))) score += 30;
+    return score;
+  };
+  return moves.slice().sort((a,b) => scoreMove(b) - scoreMove(a));
 }
 
 function minimax(game, depth, alpha, beta, maximizing){
   if (depth === 0 || game.game_over()){
-    return { score: quiescence(game, alpha, beta, maximizing), move: null };
+    return { score: evaluateBoard(game), move: null };
   }
   const moves = orderMoves(game.moves({ verbose: true }));
   let best = maximizing ? -Infinity : Infinity;
@@ -595,6 +572,15 @@ function minimax(game, depth, alpha, beta, maximizing){
 }
 
 function findBestMove(game, depth){
+  const historyKey = game.history().join(' ');
+  const bookLine = OPENING_BOOK[historyKey];
+  if (bookLine && game.history().length <= 10){
+    const legal = game.moves({ verbose: true });
+    const bookMoves = legal.filter(m => bookLine.includes(m.san));
+    if (bookMoves.length){
+      return { score: 0, move: bookMoves[Math.floor(Math.random() * bookMoves.length)] };
+    }
+  }
   const maximizing = game.turn() === 'w';
   return minimax(game, depth, -Infinity, Infinity, maximizing);
 }
