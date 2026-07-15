@@ -357,6 +357,7 @@
     <div>
       <h1>Quiet Study <span>— a chess board</span></h1>
       <p>Play either side. The engine on the other side of the board thinks in minimax.</p>
+      <p>Version 1.0</p>
     </div>
   </header>
 
@@ -517,12 +518,70 @@ function evaluateBoard(game){
   return score;
 }
 
-function orderMoves(moves){
-  return moves.slice().sort((a,b) => (b.captured ? VALUES[b.captured] : 0) - (a.captured ? VALUES[a.captured] : 0));
+function moveScore(m){
+  let s = 0;
+  if (m.captured) s += VALUES[m.captured] * 10 - VALUES[m.piece];
+  if (m.flags.includes('p')) s += VALUES.q;
+  return s;
 }
 
-function minimax(game, depth, alpha, beta, maximizing){
-  if (depth === 0 || game.game_over()){
+function orderMoves(moves){
+  return moves.slice().sort((a,b) => moveScore(b) - moveScore(a));
+}
+
+// Exchange resolution: when the search bottoms out right after a capture, keep
+// resolving *recaptures on that same square* (a standard static-exchange check)
+// instead of stopping mid-trade. This fixes the classic horizon-effect blunder
+// (AI thinks it wins a piece, but stops looking one move before losing it back)
+// while staying cheap — only moves targeting one square are considered, not the
+// whole board, so it can't blow up into a slow, full second search.
+let exchangeBudget = 0;
+function resolveExchange(game, alpha, beta, maximizing, square, qdepth){
+  // Hard budget cap: in dense/tactical positions a huge fraction of leaves can be
+  // capture-reached, and chess.js's move generation isn't cheap. Capping the total
+  // number of exchange checks per search keeps worst-case added time small and
+  // predictable no matter how tactical the position is. Checked before any work
+  // so an exhausted budget costs almost nothing.
+  if (exchangeBudget <= 0) return evaluateBoard(game);
+  exchangeBudget--;
+  const standPat = evaluateBoard(game);
+  if (qdepth <= 0 || game.game_over()) return standPat;
+
+  if (maximizing){
+    if (standPat >= beta) return beta;
+    if (standPat > alpha) alpha = standPat;
+  } else {
+    if (standPat <= alpha) return alpha;
+    if (standPat < beta) beta = standPat;
+  }
+
+  const recaptures = orderMoves(
+    game.moves({ verbose: true }).filter(m => m.to === square && (m.captured || m.flags.includes('p')))
+  );
+  for (const m of recaptures){
+    game.move(m.san);
+    const score = resolveExchange(game, alpha, beta, !maximizing, square, qdepth - 1);
+    game.undo();
+    if (maximizing){
+      if (score > alpha) alpha = score;
+      if (alpha >= beta) return beta;
+    } else {
+      if (score < beta) beta = score;
+      if (beta <= alpha) return alpha;
+    }
+  }
+  return maximizing ? alpha : beta;
+}
+
+function minimax(game, depth, alpha, beta, maximizing, captureSquare){
+  if (depth === 0){
+    // Only extend if we just landed here via a capture/promotion — that's the
+    // horizon-effect case. Quiet leaves use the fast static eval as before,
+    // so this adds negligible overall time.
+    if (captureSquare) return { score: resolveExchange(game, alpha, beta, maximizing, captureSquare, 2), move: null };
+    return { score: evaluateBoard(game), move: null };
+  }
+  if (game.game_over()){
     return { score: evaluateBoard(game), move: null };
   }
   const moves = orderMoves(game.moves({ verbose: true }));
@@ -530,7 +589,7 @@ function minimax(game, depth, alpha, beta, maximizing){
   const bestMoves = [];
   for (const m of moves){
     game.move(m.san);
-    const result = minimax(game, depth - 1, alpha, beta, !maximizing).score;
+    const result = minimax(game, depth - 1, alpha, beta, !maximizing, (m.captured || m.flags.includes('p')) ? m.to : null).score;
     game.undo();
     if (maximizing){
       if (result > best){ best = result; bestMoves.length = 0; bestMoves.push(m); }
@@ -549,6 +608,7 @@ function minimax(game, depth, alpha, beta, maximizing){
 
 function findBestMove(game, depth){
   const maximizing = game.turn() === 'w';
+  exchangeBudget = 400;
   return minimax(game, depth, -Infinity, Infinity, maximizing);
 }
 
