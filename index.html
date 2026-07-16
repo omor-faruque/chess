@@ -357,7 +357,7 @@
     <div>
       <h1>Quiet Study <span>— a chess board</span></h1>
       <p>Play either side. The engine on the other side of the board thinks in minimax.</p>
-      <p>version 3.0</p>
+      <p>Version 4.0</p>
     </div>
   </header>
 
@@ -388,7 +388,7 @@
         <select id="difficulty">
           <option value="1">Easy — about 1320 Elo</option>
           <option value="2" selected>Medium — about 1600 Elo</option>
-          <option value="3">Hard — about 2300 Elo</option>
+          <option value="3">Hard — about 2800 Elo</option>
           <option value="4">Expert — full engine strength</option>
         </select>
         <div class="difficulty-note" id="engineStatusNote">Powered by Stockfish, running locally in your browser.</div>
@@ -623,7 +623,7 @@ const SF_FILE = 'stockfish-18-lite-single.js';
 const DIFFICULTY_SETTINGS = {
   '1': { limitStrength: true,  elo: 1320, movetime: 300  },
   '2': { limitStrength: true,  elo: 1600, movetime: 500  },
-  '3': { limitStrength: true,  elo: 2300, movetime: 800  },
+  '3': { limitStrength: true,  elo: 2800, movetime: 800  },
   '4': { limitStrength: false, elo: null, movetime: 1000 }
 };
 
