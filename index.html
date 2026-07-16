@@ -357,7 +357,7 @@
     <div>
       <h1>Quiet Study <span>— a chess board</span></h1>
       <p>Play either side. The engine on the other side of the board thinks in minimax.</p>
-      <p>Version 1.0</p>
+      <p>version 2.0</p>
     </div>
   </header>
 
@@ -386,12 +386,12 @@
       <section class="control-group">
         <h2>Opponent strength</h2>
         <select id="difficulty">
-          <option value="2">Easy — thinks 2 moves ahead</option>
-          <option value="3" selected>Medium — thinks 3 moves ahead</option>
-          <option value="4">Hard — thinks 4 moves ahead</option>
-          <option value="5">Expert — thinks 5 moves ahead (slowest)</option>
+          <option value="1">Easy — about 1320 Elo</option>
+          <option value="2" selected>Medium — about 1600 Elo</option>
+          <option value="3">Hard — about 2000 Elo</option>
+          <option value="4">Expert — full engine strength</option>
         </select>
-        <div class="difficulty-note">Higher levels search more positions and take longer to move.</div>
+        <div class="difficulty-note" id="engineStatusNote">Powered by Stockfish, running locally in your browser.</div>
       </section>
 
       <section class="control-group buttons-row">
@@ -606,11 +606,126 @@ function minimax(game, depth, alpha, beta, maximizing, captureSquare){
   return { score: best, move: chosen };
 }
 
+/* ---------------------------------------------------------
+   Stockfish engine (WASM) — real chess engine running locally
+   in the browser via a Web Worker. This replaces hand-rolled
+   minimax as the actual move source; the minimax code above is
+   kept only as an automatic fallback if Stockfish fails to load
+   (e.g. no network access to the CDN, or an unsupported browser).
+--------------------------------------------------------- */
+const SF_BASE = 'https://cdn.jsdelivr.net/npm/stockfish@18.0.8/bin/';
+const SF_FILE = 'stockfish-18-lite-single.js';
+
+// Difficulty -> (Elo target, thinking time). Uses Stockfish's own
+// UCI_LimitStrength/UCI_Elo so "Easy" is a genuinely weaker player,
+// not just the same engine cut off early.
+const DIFFICULTY_SETTINGS = {
+  '1': { limitStrength: true,  elo: 1320, movetime: 300  },
+  '2': { limitStrength: true,  elo: 1600, movetime: 500  },
+  '3': { limitStrength: true,  elo: 2000, movetime: 800  },
+  '4': { limitStrength: false, elo: null, movetime: 1200 }
+};
+
+let sfWorker = null;
+let sfReadyPromise = null;
+
+function loadStockfish(){
+  if (sfReadyPromise) return sfReadyPromise;
+  sfReadyPromise = new Promise((resolve, reject) => {
+    let worker;
+    try {
+      // Classic worker scripts loaded via importScripts() work cross-origin
+      // without needing CORS headers, unlike `new Worker(crossOriginUrl)`
+      // directly (which browsers block). We wrap the CDN script in a tiny
+      // same-origin blob worker and importScripts() it from there.
+      // Module.locateFile is set first so the engine can find its .wasm
+      // file on the CDN even though the worker's own URL is a blob: URL.
+      const bootstrap =
+        'self.Module = { locateFile: function(path){ return ' + JSON.stringify(SF_BASE) + ' + path; } };\n' +
+        'importScripts(' + JSON.stringify(SF_BASE + SF_FILE) + ');\n';
+      const blob = new Blob([bootstrap], { type: 'application/javascript' });
+      const blobUrl = URL.createObjectURL(blob);
+      worker = new Worker(blobUrl);
+    } catch (err){
+      reject(err);
+      return;
+    }
+    const timeout = setTimeout(() => reject(new Error('Stockfish load timed out')), 20000);
+    let uciAcked = false;
+    worker.onerror = (e) => { clearTimeout(timeout); reject(e); };
+    worker.onmessage = (e) => {
+      const line = typeof e.data === 'string' ? e.data : '';
+      if (line === 'uciok'){
+        uciAcked = true;
+        worker.postMessage('isready');
+      } else if (line === 'readyok' && uciAcked){
+        clearTimeout(timeout);
+        sfWorker = worker;
+        resolve(worker);
+      }
+    };
+    worker.postMessage('uci');
+  });
+  return sfReadyPromise;
+}
+
+function uciToMove(uciMove){
+  if (!uciMove || uciMove === '(none)') return null;
+  return {
+    from: uciMove.slice(0, 2),
+    to: uciMove.slice(2, 4),
+    promotion: uciMove.length > 4 ? uciMove.slice(4, 5) : undefined
+  };
+}
+
+function getStockfishMove(fen, difficultyValue){
+  const settings = DIFFICULTY_SETTINGS[difficultyValue] || DIFFICULTY_SETTINGS['2'];
+  return loadStockfish().then(worker => {
+    return new Promise((resolve, reject) => {
+      const failTimer = setTimeout(() => {
+        worker.removeEventListener('message', handler);
+        reject(new Error('Stockfish search timed out'));
+      }, settings.movetime + 10000);
+      function handler(e){
+        const line = typeof e.data === 'string' ? e.data : '';
+        if (line.indexOf('bestmove') === 0){
+          clearTimeout(failTimer);
+          worker.removeEventListener('message', handler);
+          resolve(uciToMove(line.split(' ')[1]));
+        }
+      }
+      worker.addEventListener('message', handler);
+      worker.postMessage('setoption name UCI_LimitStrength value ' + (settings.limitStrength ? 'true' : 'false'));
+      if (settings.limitStrength){
+        worker.postMessage('setoption name UCI_Elo value ' + settings.elo);
+      }
+      worker.postMessage('position fen ' + fen);
+      worker.postMessage('go movetime ' + settings.movetime);
+    });
+  });
+}
+
+// Kick off loading in the background as soon as the page is ready, so the
+// engine is likely already warm by the time the first AI move is needed.
+const engineStatusNote = document.getElementById('engineStatusNote');
+loadStockfish().catch(() => {
+  if (engineStatusNote){
+    engineStatusNote.textContent = 'Could not load Stockfish (no network access?) — using the built-in fallback engine instead.';
+  }
+});
+
+// Local fallback engine (used only if Stockfish fails to load).
 function findBestMove(game, depth){
   const maximizing = game.turn() === 'w';
   exchangeBudget = 400;
   return minimax(game, depth, -Infinity, Infinity, maximizing);
 }
+
+// Difficulty value -> local fallback search depth, so the fallback engine
+// still respects the selected difficulty if Stockfish is unavailable.
+const FALLBACK_DEPTH = { '1': 2, '2': 3, '3': 4, '4': 5 };
+
+
 
 /* ---------------------------------------------------------
    App state
@@ -888,18 +1003,32 @@ function triggerComputerMove(){
   thinking = true;
   updateStatus();
   setDisabled(true);
-  setTimeout(() => {
-    const depth = parseInt(difficultySel.value, 10);
-    const result = findBestMove(game, depth);
-    if (result.move){
-      const move = game.move(result.move.san);
-      lastMove = { from: move.from, to: move.to };
-      lastMover = 'ai';
-    }
-    thinking = false;
-    setDisabled(false);
-    render();
-  }, 50);
+  const fen = game.fen();
+  const difficultyValue = difficultySel.value;
+  getStockfishMove(fen, difficultyValue)
+    .catch(() => {
+      // Stockfish unavailable — fall back to the local engine.
+      const depth = FALLBACK_DEPTH[difficultyValue] || 3;
+      const result = findBestMove(game, depth);
+      return result.move ? { from: result.move.from, to: result.move.to, promotion: result.move.promotion } : null;
+    })
+    .then(mv => {
+      if (mv){
+        const move = game.move({ from: mv.from, to: mv.to, promotion: mv.promotion || 'q' });
+        if (move){
+          lastMove = { from: move.from, to: move.to };
+          lastMover = 'ai';
+        }
+      }
+    })
+    .catch(err => {
+      console.warn('AI move failed', err);
+    })
+    .then(() => {
+      thinking = false;
+      setDisabled(false);
+      render();
+    });
 }
 
 function setDisabled(disabled){
@@ -957,18 +1086,29 @@ hintBtn.addEventListener('click', () => {
   hintBanner.textContent = 'Calculating…';
   hintBanner.classList.add('show');
   setDisabled(true);
-  setTimeout(() => {
-    const depth = Math.max(2, parseInt(difficultySel.value, 10));
-    const result = findBestMove(game, depth);
-    setDisabled(false);
-    if (result.move){
-      hintMove = { from: result.move.from, to: result.move.to };
-      hintBanner.textContent = 'Suggested move: ' + result.move.san + ' (from ' + result.move.from + ' to ' + result.move.to + ')';
-    } else {
-      hintBanner.textContent = 'No move available.';
-    }
-    render();
-  }, 50);
+  const fen = game.fen();
+  const difficultyValue = difficultySel.value;
+  getStockfishMove(fen, difficultyValue)
+    .catch(() => {
+      const depth = Math.max(2, FALLBACK_DEPTH[difficultyValue] || 3);
+      const result = findBestMove(game, depth);
+      return result.move ? { from: result.move.from, to: result.move.to, promotion: result.move.promotion } : null;
+    })
+    .then(mv => {
+      setDisabled(false);
+      if (mv){
+        hintMove = { from: mv.from, to: mv.to };
+        hintBanner.textContent = 'Suggested move: ' + mv.from + ' to ' + mv.to;
+      } else {
+        hintBanner.textContent = 'No move available.';
+      }
+      render();
+    })
+    .catch(err => {
+      setDisabled(false);
+      hintBanner.textContent = 'Could not calculate a hint.';
+      console.warn('Hint failed', err);
+    });
 });
 
 function startNewGame(){
