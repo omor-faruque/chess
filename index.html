@@ -357,7 +357,7 @@
     <div>
       <h1>Quiet Study <span>— a chess board</span></h1>
       <p>Play either side. The engine on the other side of the board thinks in minimax.</p>
-      <p>version 2.0</p>
+      <p>version 3.0</p>
     </div>
   </header>
 
@@ -388,7 +388,7 @@
         <select id="difficulty">
           <option value="1">Easy — about 1320 Elo</option>
           <option value="2" selected>Medium — about 1600 Elo</option>
-          <option value="3">Hard — about 2000 Elo</option>
+          <option value="3">Hard — about 2300 Elo</option>
           <option value="4">Expert — full engine strength</option>
         </select>
         <div class="difficulty-note" id="engineStatusNote">Powered by Stockfish, running locally in your browser.</div>
@@ -397,8 +397,9 @@
       <section class="control-group buttons-row">
         <button class="btn" id="newGameBtn">↺ New Game</button>
         <button class="btn" id="undoBtn">⤺ Undo my last move</button>
+        <button class="btn" id="undoAiBtn">⟲ Undo AI move &amp; play manually</button>
         <button class="btn" id="rotateBtn">⇅ Rotate Board</button>
-        <button class="btn primary" id="hintBtn">◆ Hint (minimax suggestion)</button>
+        <button class="btn primary" id="hintBtn">◆ Hint (Stockfish suggestion)</button>
       </section>
 
       <section class="control-group captured">
@@ -622,12 +623,24 @@ const SF_FILE = 'stockfish-18-lite-single.js';
 const DIFFICULTY_SETTINGS = {
   '1': { limitStrength: true,  elo: 1320, movetime: 300  },
   '2': { limitStrength: true,  elo: 1600, movetime: 500  },
-  '3': { limitStrength: true,  elo: 2000, movetime: 800  },
-  '4': { limitStrength: false, elo: null, movetime: 1200 }
+  '3': { limitStrength: true,  elo: 2300, movetime: 800  },
+  '4': { limitStrength: false, elo: null, movetime: 1000 }
 };
 
 let sfWorker = null;
 let sfReadyPromise = null;
+// Serializes every engine request so we can never send overlapping UCI
+// commands — Stockfish's own docs warn that sending position/go while a
+// previous search is still active can make it hang.
+let engineChain = Promise.resolve();
+
+function resetEngine(){
+  if (sfWorker){
+    try { sfWorker.terminate(); } catch (e) { /* ignore */ }
+  }
+  sfWorker = null;
+  sfReadyPromise = null;
+}
 
 function loadStockfish(){
   if (sfReadyPromise) return sfReadyPromise;
@@ -650,9 +663,9 @@ function loadStockfish(){
       reject(err);
       return;
     }
-    const timeout = setTimeout(() => reject(new Error('Stockfish load timed out')), 20000);
+    const timeout = setTimeout(() => { resetEngine(); reject(new Error('Stockfish load timed out')); }, 20000);
     let uciAcked = false;
-    worker.onerror = (e) => { clearTimeout(timeout); reject(e); };
+    worker.onerror = (e) => { clearTimeout(timeout); resetEngine(); reject(e); };
     worker.onmessage = (e) => {
       const line = typeof e.data === 'string' ? e.data : '';
       if (line === 'uciok'){
@@ -678,23 +691,35 @@ function uciToMove(uciMove){
   };
 }
 
-function getStockfishMove(fen, difficultyValue){
-  const settings = DIFFICULTY_SETTINGS[difficultyValue] || DIFFICULTY_SETTINGS['2'];
+function runSearch(fen, settings){
   return loadStockfish().then(worker => {
     return new Promise((resolve, reject) => {
-      const failTimer = setTimeout(() => {
+      let settled = false;
+      // If the engine doesn't answer in a sane amount of time, assume it's
+      // wedged rather than waiting forever — reject this request AND throw
+      // the worker away so the next request starts fresh instead of talking
+      // to a stuck engine (this is what previously could look like a freeze).
+      const hardTimeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
         worker.removeEventListener('message', handler);
+        resetEngine();
         reject(new Error('Stockfish search timed out'));
-      }, settings.movetime + 10000);
+      }, settings.movetime + 4000);
+
       function handler(e){
+        if (settled) return;
         const line = typeof e.data === 'string' ? e.data : '';
         if (line.indexOf('bestmove') === 0){
-          clearTimeout(failTimer);
+          settled = true;
+          clearTimeout(hardTimeout);
           worker.removeEventListener('message', handler);
           resolve(uciToMove(line.split(' ')[1]));
         }
       }
       worker.addEventListener('message', handler);
+      // Force any leftover search to finish before starting a new one.
+      worker.postMessage('stop');
       worker.postMessage('setoption name UCI_LimitStrength value ' + (settings.limitStrength ? 'true' : 'false'));
       if (settings.limitStrength){
         worker.postMessage('setoption name UCI_Elo value ' + settings.elo);
@@ -703,6 +728,14 @@ function getStockfishMove(fen, difficultyValue){
       worker.postMessage('go movetime ' + settings.movetime);
     });
   });
+}
+
+function getStockfishMove(fen, difficultyValue){
+  const settings = DIFFICULTY_SETTINGS[difficultyValue] || DIFFICULTY_SETTINGS['2'];
+  const task = engineChain.then(() => runSearch(fen, settings));
+  // Keep the queue alive even after a failure so later moves aren't blocked.
+  engineChain = task.then(() => {}, () => {});
+  return task;
 }
 
 // Kick off loading in the background as soon as the page is ready, so the
@@ -740,6 +773,10 @@ let lastMover = null;
 let hintMove = null;
 let thinking = false;
 let gameOver = false;
+// When true, the next move can be played for whichever color's turn it
+// currently is (not just humanColor) — used right after "Undo AI move &
+// play manually" so the human can override the engine's move for one ply.
+let manualOverride = false;
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
@@ -750,6 +787,7 @@ const capturedByBlackEl = document.getElementById('capturedByBlack');
 const difficultySel = document.getElementById('difficulty');
 const newGameBtn = document.getElementById('newGameBtn');
 const undoBtn = document.getElementById('undoBtn');
+const undoAiBtn = document.getElementById('undoAiBtn');
 const hintBtn = document.getElementById('hintBtn');
 const promoModal = document.getElementById('promoModal');
 const promoChoices = document.getElementById('promoChoices');
@@ -833,6 +871,7 @@ function render(){
   renderMoveList();
   renderCaptured();
   updateStatus();
+  undoAiBtn.disabled = thinking || !canUndoAiMove();
 }
 
 function getCheckedKingSquare(){
@@ -915,10 +954,15 @@ function updateStatus(){
   }
   const turn = game.turn() === 'w' ? 'White' : 'Black';
   const isHumanTurn = game.turn() === humanColor;
-  let text = turn + ' to move' + (isHumanTurn ? ' — your move' : ' — opponents move');
+  let text;
+  if (manualOverride){
+    text = turn + ' to move — pick a manual move for the AI';
+  } else {
+    text = turn + ' to move' + (isHumanTurn ? ' — your move' : ' — opponents move');
+  }
   if (game.in_check()) text += ' (in check)';
   statusEl.textContent = text;
-  if (isHumanTurn) statusEl.classList.add('active');
+  if (isHumanTurn || manualOverride) statusEl.classList.add('active');
 }
 
 /* ---------------------------------------------------------
@@ -926,10 +970,11 @@ function updateStatus(){
 --------------------------------------------------------- */
 function onSquareClick(square){
   if (gameOver || thinking) return;
-  if (game.turn() !== humanColor) return;
+  if (game.turn() !== humanColor && !manualOverride) return;
 
   hintMove = null; hintBanner.classList.remove('show');
 
+  const activeColor = game.turn();
   const piece = game.get(square);
 
   if (selectedSquare){
@@ -939,7 +984,7 @@ function onSquareClick(square){
       selectedSquare = null; legalTargets = [];
       return;
     }
-    if (piece && piece.color === humanColor){
+    if (piece && piece.color === activeColor){
       selectSquare(square);
       return;
     }
@@ -948,7 +993,7 @@ function onSquareClick(square){
     return;
   }
 
-  if (piece && piece.color === humanColor){
+  if (piece && piece.color === activeColor){
     selectSquare(square);
   }
 }
@@ -977,7 +1022,8 @@ function finalizeMove(from, to, promotion){
   const move = game.move({ from, to, promotion: promotion || 'q' });
   if (!move) return;
   lastMove = { from: move.from, to: move.to };
-  lastMover = 'human';
+  lastMover = move.color === humanColor ? 'human' : 'manual';
+  manualOverride = false;
   render();
   if (!gameOver && game.turn() !== humanColor){
     triggerComputerMove();
@@ -1034,8 +1080,14 @@ function triggerComputerMove(){
 function setDisabled(disabled){
   newGameBtn.disabled = disabled;
   undoBtn.disabled = disabled;
+  undoAiBtn.disabled = disabled || !canUndoAiMove();
   hintBtn.disabled = disabled;
   difficultySel.disabled = disabled;
+}
+
+function canUndoAiMove(){
+  const hist = game.history({ verbose: true });
+  return hist.length > 0 && hist[hist.length - 1].color !== humanColor;
 }
 
 /* ---------------------------------------------------------
@@ -1067,12 +1119,30 @@ undoBtn.addEventListener('click', () => {
   if (game.history().length > 0 && game.turn() !== humanColor){
     game.undo();
   }
+  manualOverride = false;
   selectedSquare = null; legalTargets = []; hintMove = null;
   hintBanner.classList.remove('show');
   const h = game.history({ verbose: true });
   lastMove = h.length ? { from: h[h.length-1].from, to: h[h.length-1].to } : null;
   lastMover = h.length ? (h[h.length-1].color === humanColor ? 'human' : 'ai') : null;
   gameOver = false;
+  render();
+});
+
+undoAiBtn.addEventListener('click', () => {
+  if (thinking || !canUndoAiMove()) return;
+  // Undo only the AI's last move (leave the human's move before it in
+  // place), then let the human pick whatever move they want to play in
+  // its place — effectively taking manual control of that one ply.
+  game.undo();
+  manualOverride = true;
+  selectedSquare = null; legalTargets = []; hintMove = null;
+  const h = game.history({ verbose: true });
+  lastMove = h.length ? { from: h[h.length-1].from, to: h[h.length-1].to } : null;
+  lastMover = h.length ? (h[h.length-1].color === humanColor ? 'human' : 'ai') : null;
+  gameOver = false;
+  hintBanner.textContent = "AI's move undone — pick a move to play for it manually.";
+  hintBanner.classList.add('show');
   render();
 });
 
@@ -1120,6 +1190,7 @@ function startNewGame(){
   hintMove = null;
   thinking = false;
   gameOver = false;
+  manualOverride = false;
   hintBanner.classList.remove('show');
   buildLabels();
   render();
