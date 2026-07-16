@@ -357,7 +357,7 @@
     <div>
       <h1>Quiet Study <span>— a chess board</span></h1>
       <p>Play either side. The engine on the other side of the board thinks in minimax.</p>
-      <p>Version 4.0</p>
+      <p>version 3.0</p>
     </div>
   </header>
 
@@ -388,7 +388,7 @@
         <select id="difficulty">
           <option value="1">Easy — about 1320 Elo</option>
           <option value="2" selected>Medium — about 1600 Elo</option>
-          <option value="3">Hard — about 2800 Elo</option>
+          <option value="3">Hard — about 2300 Elo</option>
           <option value="4">Expert — full engine strength</option>
         </select>
         <div class="difficulty-note" id="engineStatusNote">Powered by Stockfish, running locally in your browser.</div>
@@ -614,8 +614,7 @@ function minimax(game, depth, alpha, beta, maximizing, captureSquare){
    kept only as an automatic fallback if Stockfish fails to load
    (e.g. no network access to the CDN, or an unsupported browser).
 --------------------------------------------------------- */
-const SF_BASE = 'https://cdn.jsdelivr.net/npm/stockfish@18.0.8/bin/';
-const SF_FILE = 'stockfish-18-lite-single.js';
+const SF_LOCAL = 'stockfish.js';
 
 // Difficulty -> (Elo target, thinking time). Uses Stockfish's own
 // UCI_LimitStrength/UCI_Elo so "Easy" is a genuinely weaker player,
@@ -623,7 +622,7 @@ const SF_FILE = 'stockfish-18-lite-single.js';
 const DIFFICULTY_SETTINGS = {
   '1': { limitStrength: true,  elo: 1320, movetime: 300  },
   '2': { limitStrength: true,  elo: 1600, movetime: 500  },
-  '3': { limitStrength: true,  elo: 2800, movetime: 800  },
+  '3': { limitStrength: true,  elo: 2300, movetime: 800  },
   '4': { limitStrength: false, elo: null, movetime: 1000 }
 };
 
@@ -647,18 +646,10 @@ function loadStockfish(){
   sfReadyPromise = new Promise((resolve, reject) => {
     let worker;
     try {
-      // Classic worker scripts loaded via importScripts() work cross-origin
-      // without needing CORS headers, unlike `new Worker(crossOriginUrl)`
-      // directly (which browsers block). We wrap the CDN script in a tiny
-      // same-origin blob worker and importScripts() it from there.
-      // Module.locateFile is set first so the engine can find its .wasm
-      // file on the CDN even though the worker's own URL is a blob: URL.
-      const bootstrap =
-        'self.Module = { locateFile: function(path){ return ' + JSON.stringify(SF_BASE) + ' + path; } };\n' +
-        'importScripts(' + JSON.stringify(SF_BASE + SF_FILE) + ');\n';
-      const blob = new Blob([bootstrap], { type: 'application/javascript' });
-      const blobUrl = URL.createObjectURL(blob);
-      worker = new Worker(blobUrl);
+      // Resolve stockfish.js relative to this page so the absolute URL is
+      // correct whether the page is opened via file:// or a local server.
+      const sfUrl = new URL(SF_LOCAL, window.location.href).href;
+      worker = new Worker(sfUrl);
     } catch (err){
       reject(err);
       return;
