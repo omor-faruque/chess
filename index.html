@@ -316,6 +316,95 @@
   }
   .hint-banner.show{ display:block; }
 
+  .setup-remove-inline{
+    display:none;
+    width:min(72vw, 480px);
+    align-self:flex-start;
+  }
+  .setup-remove-inline.show{
+    display:flex;
+  }
+
+  .setup-panel{
+    display:none;
+    background:rgba(255,255,255,0.02);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:10px;
+    gap:10px;
+  }
+  #setupPanel{
+    width:min(72vw, 480px);
+    align-self:flex-start;
+  }
+  .setup-panel.show{ display:flex; flex-direction:column; }
+  .setup-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+  }
+  .setup-grid label{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    font-size:0.74rem;
+    color:var(--muted);
+    font-family:'IBM Plex Mono', monospace;
+  }
+  .setup-grid select{
+    width:100%;
+    padding:8px;
+    border-radius:8px;
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    color:var(--ivory);
+    font-family:'Inter', sans-serif;
+    font-size:0.84rem;
+  }
+  .piece-bank{
+    display:grid;
+    grid-template-columns:repeat(6, minmax(0, 1fr));
+    gap:6px;
+  }
+  .piece-bank button{
+    border:1px solid var(--line);
+    background:var(--panel-raised);
+    border-radius:8px;
+    color:var(--ivory);
+    min-height:40px;
+    font-size:1.15rem;
+    cursor:grab;
+  }
+  .piece-bank button:active{ cursor:grabbing; }
+  .sq.setup-mode{ outline:1px solid rgba(255,255,255,0.06); }
+  .sq.setup-mode .piece{ pointer-events:auto; cursor:grab; }
+  .sq.setup-mode .piece:active{ cursor:grabbing; }
+  .sq.drop-over{ box-shadow:inset 0 0 0 4px var(--teal) !important; }
+  .castle-row{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:10px;
+    font-size:0.75rem;
+    color:var(--muted);
+    font-family:'IBM Plex Mono', monospace;
+  }
+  .castle-row label{ display:flex; align-items:center; gap:4px; }
+  .setup-actions{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .setup-actions .btn.warn{
+    border-color:var(--danger);
+    color:var(--danger);
+  }
+  .setup-actions .btn.warn:hover:not(:disabled){
+    background:rgba(181,84,74,0.12);
+  }
+  .setup-note{
+    font-size:0.73rem;
+    line-height:1.35;
+    color:var(--muted);
+    font-family:'IBM Plex Mono', monospace;
+  }
+
   .modal-overlay{
     position:fixed; inset:0;
     background:rgba(10,9,6,0.72);
@@ -372,6 +461,51 @@
       </div>
       <div class="status" id="status">Set up your game and press New Game.</div>
       <div class="hint-banner" id="hintBanner"></div>
+      <button class="btn subtle warn setup-remove-inline" id="setupRemoveBtn" disabled>✕ Remove selected piece</button>
+
+      <section class="control-group setup-panel" id="setupPanel">
+        <h2>Board setup mode</h2>
+        <div class="setup-grid">
+          <label>
+            Drag pieces from tray
+            <div class="piece-bank" id="pieceBank">
+              <button type="button" draggable="true" data-piece="wp">♙</button>
+              <button type="button" draggable="true" data-piece="wn">♘</button>
+              <button type="button" draggable="true" data-piece="wb">♗</button>
+              <button type="button" draggable="true" data-piece="wr">♖</button>
+              <button type="button" draggable="true" data-piece="wq">♕</button>
+              <button type="button" draggable="true" data-piece="wk">♔</button>
+              <button type="button" draggable="true" data-piece="bp">♟</button>
+              <button type="button" draggable="true" data-piece="bn">♞</button>
+              <button type="button" draggable="true" data-piece="bb">♝</button>
+              <button type="button" draggable="true" data-piece="br">♜</button>
+              <button type="button" draggable="true" data-piece="bq">♛</button>
+              <button type="button" draggable="true" data-piece="bk">♚</button>
+            </div>
+          </label>
+          <label>
+            Side to move
+            <select id="setupTurnSel">
+              <option value="w">White to move</option>
+              <option value="b">Black to move</option>
+            </select>
+          </label>
+        </div>
+        <div class="castle-row">
+          Castling rights:
+          <label><input type="checkbox" id="castleK" checked> K</label>
+          <label><input type="checkbox" id="castleQ" checked> Q</label>
+          <label><input type="checkbox" id="castlek" checked> k</label>
+          <label><input type="checkbox" id="castleq" checked> q</label>
+        </div>
+        <div class="setup-actions">
+          <button class="btn subtle" id="setupClearBtn">Clear board</button>
+          <button class="btn subtle" id="setupResetBtn">Reset standard</button>
+          <button class="btn" id="setupCancelBtn">Cancel setup</button>
+          <button class="btn primary" id="setupApplyBtn">Start from this position</button>
+        </div>
+        <div class="setup-note">Drag from tray to place, drag board pieces to move, drop into remove zone to delete.</div>
+      </section>
     </div>
 
     <aside class="panel">
@@ -400,6 +534,7 @@
         <button class="btn" id="undoAiBtn">⟲ Undo AI move &amp; play manually</button>
         <button class="btn" id="rotateBtn">⇅ Rotate Board</button>
         <button class="btn primary" id="hintBtn">◆ Hint (Stockfish suggestion)</button>
+        <button class="btn subtle" id="setupBtn">✎ Setup Position</button>
       </section>
 
       <section class="control-group captured">
@@ -768,6 +903,9 @@ let gameOver = false;
 // currently is (not just humanColor) — used right after "Undo AI move &
 // play manually" so the human can override the engine's move for one ply.
 let manualOverride = false;
+let setupMode = false;
+let setupBackupFen = null;
+let dragPayload = null;
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
@@ -780,6 +918,19 @@ const newGameBtn = document.getElementById('newGameBtn');
 const undoBtn = document.getElementById('undoBtn');
 const undoAiBtn = document.getElementById('undoAiBtn');
 const hintBtn = document.getElementById('hintBtn');
+const setupBtn = document.getElementById('setupBtn');
+const setupPanel = document.getElementById('setupPanel');
+const pieceBank = document.getElementById('pieceBank');
+const setupTurnSel = document.getElementById('setupTurnSel');
+const setupApplyBtn = document.getElementById('setupApplyBtn');
+const setupCancelBtn = document.getElementById('setupCancelBtn');
+const setupClearBtn = document.getElementById('setupClearBtn');
+const setupResetBtn = document.getElementById('setupResetBtn');
+const setupRemoveBtn = document.getElementById('setupRemoveBtn');
+const castleK = document.getElementById('castleK');
+const castleQ = document.getElementById('castleQ');
+const castlek = document.getElementById('castlek');
+const castleq = document.getElementById('castleq');
 const promoModal = document.getElementById('promoModal');
 const promoChoices = document.getElementById('promoChoices');
 const fileLabels = document.getElementById('fileLabels');
@@ -832,6 +983,7 @@ function render(){
       sq.className = 'sq ' + (isLight ? 'light' : 'dark');
       const name = squareName(r, c);
       sq.dataset.square = name;
+      if (setupMode) sq.classList.add('setup-mode');
 
       if (selectedSquare === name) sq.classList.add('selected');
       if (lastMove && (lastMove.from === name)) sq.classList.add(lastMover === 'ai' ? 'ai-from' : 'last-from');
@@ -851,7 +1003,20 @@ function render(){
         const span = document.createElement('span');
         span.className = 'piece ' + (piece.color === 'w' ? 'white-piece' : 'black-piece');
         span.textContent = PIECE_UNICODE[piece.color][piece.type];
+        if (setupMode){
+          // Drag from the square container to make board-piece moves reliable.
+          sq.draggable = true;
+          sq.addEventListener('dragstart', (e) => onBoardPieceDragStart(e, name, piece.color + piece.type));
+          sq.addEventListener('dragend', onAnyDragEnd);
+        }
         sq.appendChild(span);
+      }
+
+      if (setupMode){
+        sq.addEventListener('dragover', onSquareDragOver);
+        sq.addEventListener('dragenter', onSquareDragEnter);
+        sq.addEventListener('dragleave', onSquareDragLeave);
+        sq.addEventListener('drop', (e) => onSquareDrop(e, name));
       }
 
       sq.addEventListener('click', () => onSquareClick(name));
@@ -862,7 +1027,14 @@ function render(){
   renderMoveList();
   renderCaptured();
   updateStatus();
+  updateSetupRemoveButton();
   undoAiBtn.disabled = thinking || !canUndoAiMove();
+}
+
+function updateSetupRemoveButton(){
+  if (!setupRemoveBtn) return;
+  const canRemove = setupMode && selectedSquare && !!game.get(selectedSquare);
+  setupRemoveBtn.disabled = !canRemove;
 }
 
 function getCheckedKingSquare(){
@@ -914,6 +1086,11 @@ function renderCaptured(){
 
 function updateStatus(){
   statusEl.classList.remove('active','over');
+  if (setupMode){
+    statusEl.textContent = 'Setup mode: drag from tray to place, drag pieces to move, then start from this position.';
+    statusEl.classList.add('active');
+    return;
+  }
   if (game.in_checkmate()){
     const winner = game.turn() === 'w' ? 'Black' : 'White';
     statusEl.textContent = 'Checkmate — ' + winner + ' wins.';
@@ -960,6 +1137,17 @@ function updateStatus(){
    Interaction
 --------------------------------------------------------- */
 function onSquareClick(square){
+  if (setupMode){
+    const piece = game.get(square);
+    if (piece){
+      selectedSquare = square;
+    } else {
+      selectedSquare = null;
+    }
+    legalTargets = [];
+    render();
+    return;
+  }
   if (gameOver || thinking) return;
   if (game.turn() !== humanColor && !manualOverride) return;
 
@@ -1074,11 +1262,164 @@ function setDisabled(disabled){
   undoAiBtn.disabled = disabled || !canUndoAiMove();
   hintBtn.disabled = disabled;
   difficultySel.disabled = disabled;
+  setupBtn.disabled = disabled;
 }
 
 function canUndoAiMove(){
   const hist = game.history({ verbose: true });
   return hist.length > 0 && hist[hist.length - 1].color !== humanColor;
+}
+
+function getCastlingString(){
+  let c = '';
+  if (castleK.checked) c += 'K';
+  if (castleQ.checked) c += 'Q';
+  if (castlek.checked) c += 'k';
+  if (castleq.checked) c += 'q';
+  return c || '-';
+}
+
+function getFenPlacementFromBoard(){
+  const board = game.board();
+  const rows = [];
+  for (let r = 0; r < 8; r++){
+    let row = '';
+    let empty = 0;
+    for (let c = 0; c < 8; c++){
+      const piece = board[r][c];
+      if (!piece){
+        empty++;
+        continue;
+      }
+      if (empty > 0){
+        row += String(empty);
+        empty = 0;
+      }
+      row += piece.color === 'w' ? piece.type.toUpperCase() : piece.type;
+    }
+    if (empty > 0) row += String(empty);
+    rows.push(row);
+  }
+  return rows.join('/');
+}
+
+function enterSetupMode(){
+  if (thinking) return;
+  setupMode = true;
+  setupBackupFen = game.fen();
+  manualOverride = false;
+  selectedSquare = null;
+  legalTargets = [];
+  hintMove = null;
+  hintBanner.classList.remove('show');
+  setupTurnSel.value = game.turn();
+  setupPanel.classList.add('show');
+  setupRemoveBtn.classList.add('show');
+  setupBtn.textContent = '✎ Editing Position';
+  render();
+}
+
+function exitSetupMode(){
+  setupMode = false;
+  dragPayload = null;
+  setupPanel.classList.remove('show');
+  setupRemoveBtn.classList.remove('show');
+  setupBtn.textContent = '✎ Setup Position';
+  render();
+}
+
+function onBoardPieceDragStart(e, fromSquare, pieceCode){
+  dragPayload = { kind: 'board', from: fromSquare, pieceCode };
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+}
+
+function onTrayPieceDragStart(e){
+  const pieceCode = e.currentTarget.dataset.piece;
+  dragPayload = { kind: 'tray', pieceCode };
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
+}
+
+function onAnyDragEnd(){
+  dragPayload = null;
+  document.querySelectorAll('.sq.drop-over').forEach(el => el.classList.remove('drop-over'));
+}
+
+function onSquareDragOver(e){
+  if (!setupMode || !dragPayload) return;
+  e.preventDefault();
+}
+
+function onSquareDragEnter(e){
+  if (!setupMode || !dragPayload) return;
+  e.currentTarget.classList.add('drop-over');
+}
+
+function onSquareDragLeave(e){
+  e.currentTarget.classList.remove('drop-over');
+}
+
+function onSquareDrop(e, targetSquare){
+  if (!setupMode || !dragPayload) return;
+  e.preventDefault();
+  e.currentTarget.classList.remove('drop-over');
+
+  if (dragPayload.kind === 'tray'){
+    game.remove(targetSquare);
+    game.put({ color: dragPayload.pieceCode.charAt(0), type: dragPayload.pieceCode.charAt(1) }, targetSquare);
+  } else if (dragPayload.kind === 'board'){
+    const src = dragPayload.from;
+    const srcPiece = game.get(src);
+    if (srcPiece){
+      game.remove(src);
+      game.remove(targetSquare);
+      game.put(srcPiece, targetSquare);
+    }
+  }
+
+  selectedSquare = null;
+  legalTargets = [];
+  hintMove = null;
+  render();
+}
+
+function applySetupPosition(){
+  const placement = getFenPlacementFromBoard();
+  const fen = placement + ' ' + setupTurnSel.value + ' ' + getCastlingString() + ' - 0 1';
+  const ok = game.load(fen);
+  if (!ok){
+    hintBanner.textContent = 'Invalid setup. Make sure both kings exist and the position is legal.';
+    hintBanner.classList.add('show');
+    return;
+  }
+  selectedSquare = null;
+  legalTargets = [];
+  lastMove = null;
+  lastMover = null;
+  hintMove = null;
+  thinking = false;
+  gameOver = false;
+  manualOverride = false;
+  hintBanner.classList.remove('show');
+  exitSetupMode();
+  if (!gameOver && game.turn() !== humanColor){
+    triggerComputerMove();
+  }
+}
+
+function cancelSetup(){
+  if (setupBackupFen){
+    game.load(setupBackupFen);
+  }
+  setupBackupFen = null;
+  hintBanner.classList.remove('show');
+  exitSetupMode();
+}
+
+function bindSetupDnD(){
+  pieceBank.querySelectorAll('[data-piece]').forEach(btn => {
+    btn.addEventListener('dragstart', onTrayPieceDragStart);
+    btn.addEventListener('dragend', onAnyDragEnd);
+  });
 }
 
 /* ---------------------------------------------------------
@@ -1094,6 +1435,45 @@ document.querySelectorAll('.side-btn').forEach(btn => {
 });
 
 newGameBtn.addEventListener('click', startNewGame);
+
+setupBtn.addEventListener('click', () => {
+  if (setupMode){
+    cancelSetup();
+    return;
+  }
+  enterSetupMode();
+});
+
+setupApplyBtn.addEventListener('click', applySetupPosition);
+setupCancelBtn.addEventListener('click', cancelSetup);
+
+setupClearBtn.addEventListener('click', () => {
+  if (!setupMode) return;
+  game.clear();
+  render();
+});
+
+setupResetBtn.addEventListener('click', () => {
+  if (!setupMode) return;
+  game.reset();
+  selectedSquare = null;
+  setupTurnSel.value = 'w';
+  castleK.checked = true;
+  castleQ.checked = true;
+  castlek.checked = true;
+  castleq.checked = true;
+  render();
+});
+
+setupRemoveBtn.addEventListener('click', () => {
+  if (!setupMode || !selectedSquare) return;
+  if (!game.get(selectedSquare)) return;
+  game.remove(selectedSquare);
+  selectedSquare = null;
+  legalTargets = [];
+  hintMove = null;
+  render();
+});
 
 rotateBtn.addEventListener('click', () => {
   boardFlipped = !boardFlipped;
@@ -1173,6 +1553,12 @@ hintBtn.addEventListener('click', () => {
 });
 
 function startNewGame(){
+  if (setupMode){
+    setupMode = false;
+    setupPanel.classList.remove('show');
+    setupRemoveBtn.classList.remove('show');
+    setupBtn.textContent = '✎ Setup Position';
+  }
   game.reset();
   selectedSquare = null;
   legalTargets = [];
@@ -1182,6 +1568,7 @@ function startNewGame(){
   thinking = false;
   gameOver = false;
   manualOverride = false;
+  setupBackupFen = null;
   hintBanner.classList.remove('show');
   buildLabels();
   render();
@@ -1193,6 +1580,7 @@ function startNewGame(){
 /* ---------------------------------------------------------
    Init
 --------------------------------------------------------- */
+bindSetupDnD();
 buildLabels();
 render();
 </script>
