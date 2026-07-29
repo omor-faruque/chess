@@ -26,6 +26,7 @@
     --radius: 10px;
     --shadow: 0 8px 24px rgba(0,0,0,0.35);
   }
+  .hidden{ display:none !important; }
   *{box-sizing:border-box;}
   html,body{height:100%;}
   body{
@@ -39,45 +40,52 @@
     min-height:100vh;
   }
   .app{
-    max-width:1180px;
+    max-width:1200px;
     margin:0 auto;
-    padding:32px 20px 60px;
+    padding:28px 20px 60px;
   }
   header{
     display:flex;
-    align-items:baseline;
+    align-items:center;
     justify-content:space-between;
     flex-wrap:wrap;
-    gap:8px;
+    gap:10px;
     margin-bottom:28px;
     border-bottom:1px solid var(--line);
-    padding-bottom:18px;
+    padding-bottom:16px;
   }
   header h1{
     font-family:'Fraunces', serif;
     font-weight:600;
-    font-size:2.1rem;
-    margin:0;
+    font-size:1.9rem;
+    margin:0 0 3px 0;
     letter-spacing:0.2px;
   }
   header h1 span{ color:var(--gold); font-style:italic; font-weight:500; }
-  header p{
-    margin:0;
-    color:var(--muted);
-    font-size:0.92rem;
+  .header-sub{ margin:0; color:var(--muted); font-size:0.87rem; }
+  .header-badge{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.71rem;
+    color:var(--gold-dim);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:5px 12px;
+    background:var(--panel);
+    white-space:nowrap;
+    align-self:center;
   }
   main{
     display:grid;
-    grid-template-columns:minmax(320px, 620px) 300px;
-    gap:32px;
+    grid-template-columns: auto 300px;
+    gap:28px;
     align-items:start;
     justify-content:center;
   }
-  @media (max-width:880px){
-    main{grid-template-columns:1fr; justify-items:center;}
+  @media (max-width:860px){
+    main{ grid-template-columns:1fr; justify-items:center; }
   }
 
-  .board-wrap{ display:flex; flex-direction:column; align-items:center; gap:14px; width:100%; }
+  .board-wrap{ display:flex; flex-direction:column; align-items:center; gap:12px; }
 
   .board-frame{
     position:relative;
@@ -191,20 +199,37 @@
   .status.over{ color:var(--danger); font-weight:600; }
 
   .panel{
+    width:300px;
     background:var(--panel);
     border:1px solid var(--line);
     border-radius:var(--radius);
-    padding:20px;
+    position:sticky;
+    top:20px;
+    max-height:calc(100vh - 40px);
     display:flex;
     flex-direction:column;
-    gap:20px;
-    width:100%;
+    overflow:hidden;
   }
+  @media (max-width:860px){
+    .panel{ width:100%; max-width:min(72vw,480px); position:static; max-height:none; }
+  }
+  #gameControls{
+    display:flex;
+    flex-direction:column;
+    overflow-y:auto;
+    flex:1;
+    min-height:0;
+  }
+  .control-group{
+    padding:15px 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .control-group:last-child{ border-bottom:none; flex:1; min-height:0; display:flex; flex-direction:column; }
   .control-group h2{
     font-family:'Fraunces', serif;
     font-weight:600;
-    font-size:0.78rem;
-    letter-spacing:1.4px;
+    font-size:0.72rem;
+    letter-spacing:1.6px;
     text-transform:uppercase;
     color:var(--gold-dim);
     margin:0 0 10px 0;
@@ -232,16 +257,16 @@
 
   select#difficulty{
     width:100%;
-    padding:10px;
+    padding:9px 10px;
     border-radius:8px;
     background:var(--panel-raised);
     border:1px solid var(--line);
     color:var(--ivory);
     font-family:'Inter', sans-serif;
-    font-size:0.88rem;
+    font-size:0.86rem;
   }
   .difficulty-note{
-    font-size:0.74rem;
+    font-size:0.73rem;
     color:var(--muted);
     margin-top:6px;
     line-height:1.4;
@@ -269,145 +294,160 @@
   .btn.primary{ background:var(--teal); border-color:var(--teal); color:#0d211f; }
   .btn.primary:hover:not(:disabled){ filter:brightness(1.08); }
   .btn.subtle{ background:transparent; }
+  .btn.warn{ border-color:var(--danger); color:var(--danger); }
+  .btn.warn:hover:not(:disabled){ background:rgba(181,84,74,0.1); }
 
-  .captured{ display:flex; flex-direction:column; gap:6px; }
+  .captured{ display:flex; flex-direction:column; gap:8px; }
   .captured-row{
-    min-height:26px;
-    font-size:1.15rem;
+    min-height:22px;
+    font-size:1.1rem;
     display:flex;
     flex-wrap:wrap;
     gap:2px;
     color:var(--muted);
   }
-  .captured-label{ font-size:0.7rem; color:var(--muted); font-family:'IBM Plex Mono', monospace; }
+  .captured-label{ font-size:0.69rem; color:var(--muted); font-family:'IBM Plex Mono', monospace; }
 
-  .history{ display:flex; flex-direction:column; gap:8px; flex:1; min-height:0; }
+  .history{ flex:1; min-height:0; display:flex; flex-direction:column; gap:8px; }
   #moveList{
     list-style:none;
-    margin:0;
-    padding:0;
-    max-height:220px;
+    margin:0; padding:0;
     overflow-y:auto;
     font-family:'IBM Plex Mono', monospace;
-    font-size:0.82rem;
+    font-size:0.8rem;
     display:flex;
     flex-direction:column;
     gap:2px;
+    flex:1;
+    min-height:0;
   }
-  #moveList li{
-    display:flex;
-    gap:10px;
-    padding:3px 4px;
-    border-radius:4px;
-  }
+  #moveList li{ display:flex; gap:10px; padding:3px 4px; border-radius:4px; }
   #moveList li:nth-child(odd){ background:rgba(255,255,255,0.02); }
   #moveList .mv-num{ color:var(--gold-dim); width:22px; }
-  #moveList .mv-w, #moveList .mv-b{ min-width:56px; }
+  #moveList .mv-w, #moveList .mv-b{ min-width:52px; }
 
   .hint-banner{
     display:none;
-    background:rgba(79,179,169,0.12);
-    border:1px solid var(--teal);
+    background:rgba(79,179,169,0.1);
+    border:1px solid rgba(79,179,169,0.5);
     color:var(--teal);
     border-radius:8px;
-    padding:8px 10px;
+    padding:8px 12px;
     font-family:'IBM Plex Mono', monospace;
     font-size:0.78rem;
+    text-align:center;
+    width:100%;
   }
   .hint-banner.show{ display:block; }
 
-  .setup-remove-inline{
-    display:none;
-    width:min(72vw, 480px);
-    align-self:flex-start;
-  }
-  .setup-remove-inline.show{
-    display:flex;
-  }
-
+  /* Setup panel — lives in the sidebar, replaces game controls during setup */
   .setup-panel{
     display:none;
-    background:rgba(255,255,255,0.02);
-    border:1px solid var(--line);
-    border-radius:8px;
-    padding:10px;
-    gap:10px;
+    flex-direction:column;
+    flex:1;
+    min-height:0;
+    overflow:hidden;
   }
-  #setupPanel{
-    width:min(72vw, 480px);
-    align-self:flex-start;
+  .setup-panel.show{ display:flex; }
+  .setup-panel-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:13px 18px;
+    border-bottom:1px solid var(--line);
+    background:rgba(201,162,77,0.05);
+    flex-shrink:0;
   }
-  .setup-panel.show{ display:flex; flex-direction:column; }
-  .setup-grid{
-    display:grid;
-    grid-template-columns:1fr;
-    gap:8px;
+  .setup-panel-header h2{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:0.9rem;
+    color:var(--gold);
+    margin:0;
+    letter-spacing:0.3px;
   }
-  .setup-grid label{
+  .setup-panel-body{
+    flex:1;
+    min-height:0;
+    overflow-y:auto;
     display:flex;
     flex-direction:column;
-    gap:6px;
-    font-size:0.74rem;
-    color:var(--muted);
-    font-family:'IBM Plex Mono', monospace;
+    gap:16px;
+    padding:16px 18px 20px;
   }
-  .setup-grid select{
+  .setup-section-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.68rem;
+    letter-spacing:1.2px;
+    text-transform:uppercase;
+    color:var(--gold-dim);
+    margin-bottom:7px;
+  }
+  .piece-bank{
+    display:grid;
+    grid-template-columns:repeat(6, 1fr);
+    gap:5px;
+  }
+  .piece-bank button{
+    border:1px solid var(--line);
+    background:var(--panel-raised);
+    border-radius:7px;
+    height:42px;
+    font-size:1.25rem;
+    cursor:grab;
+    transition:all 0.12s ease;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+  }
+  .piece-bank button:hover{ border-color:var(--gold-dim); background:#302b1e; }
+  .piece-bank button:active{ cursor:grabbing; }
+  .piece-bank .white-bank-piece{ color:#f0ece0; -webkit-text-stroke:0.5px #5a5440; }
+  .piece-bank .black-bank-piece{ color:#1c1915; background:#cec6b0; border-color:#a09880; }
+  .piece-bank .black-bank-piece:hover{ background:#bdb5a0; border-color:#8a7e6a; }
+  .piece-bank-divider{
+    grid-column:1/-1;
+    height:1px;
+    background:var(--line);
+    margin:1px 0;
+  }
+  .setup-select{
     width:100%;
-    padding:8px;
+    padding:9px 10px;
     border-radius:8px;
     background:var(--panel-raised);
     border:1px solid var(--line);
     color:var(--ivory);
     font-family:'Inter', sans-serif;
-    font-size:0.84rem;
+    font-size:0.85rem;
   }
-  .piece-bank{
-    display:grid;
-    grid-template-columns:repeat(6, minmax(0, 1fr));
-    gap:6px;
+  .castle-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 14px;
+    font-size:0.77rem;
+    color:var(--muted);
+    font-family:'IBM Plex Mono', monospace;
   }
-  .piece-bank button{
-    border:1px solid var(--line);
-    background:var(--panel-raised);
-    border-radius:8px;
-    color:var(--ivory);
-    min-height:40px;
-    font-size:1.15rem;
-    cursor:grab;
+  .castle-row label{ display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .setup-actions{ display:flex; flex-direction:column; gap:7px; }
+  .setup-actions-row{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .setup-note{
+    font-size:0.72rem;
+    line-height:1.45;
+    color:var(--muted);
+    font-family:'IBM Plex Mono', monospace;
+    opacity:0.85;
   }
-  .piece-bank button:active{ cursor:grabbing; }
-  .sq.setup-mode{ outline:1px solid rgba(255,255,255,0.06); }
+  .sq.setup-mode{ outline:1px solid rgba(255,255,255,0.05); }
   .sq.setup-mode .piece{ pointer-events:auto; cursor:grab; }
   .sq.setup-mode .piece:active{ cursor:grabbing; }
   .sq.drop-over{ box-shadow:inset 0 0 0 4px var(--teal) !important; }
-  .castle-row{
-    display:flex;
-    align-items:center;
-    flex-wrap:wrap;
-    gap:10px;
-    font-size:0.75rem;
-    color:var(--muted);
-    font-family:'IBM Plex Mono', monospace;
-  }
-  .castle-row label{ display:flex; align-items:center; gap:4px; }
-  .setup-actions{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-  .setup-actions .btn.warn{
-    border-color:var(--danger);
-    color:var(--danger);
-  }
-  .setup-actions .btn.warn:hover:not(:disabled){
-    background:rgba(181,84,74,0.12);
-  }
-  .setup-note{
-    font-size:0.73rem;
-    line-height:1.35;
-    color:var(--muted);
-    font-family:'IBM Plex Mono', monospace;
-  }
 
   .modal-overlay{
     position:fixed; inset:0;
-    background:rgba(10,9,6,0.72);
+    background:rgba(10,9,6,0.75);
     display:flex; align-items:center; justify-content:center;
     z-index:50;
   }
@@ -415,11 +455,12 @@
   .promo-box{
     background:var(--panel-raised);
     border:1px solid var(--line);
-    border-radius:12px;
-    padding:20px;
+    border-radius:14px;
+    padding:24px;
     text-align:center;
+    box-shadow:var(--shadow);
   }
-  .promo-box h3{ font-family:'Fraunces', serif; margin:0 0 14px 0; font-weight:600; }
+  .promo-box h3{ font-family:'Fraunces', serif; margin:0 0 16px 0; font-weight:600; font-size:1.1rem; }
   .promo-choices{ display:flex; gap:10px; }
   .promo-choices button{
     font-size:2rem;
@@ -429,14 +470,15 @@
     background:var(--panel);
     color:var(--ivory);
     cursor:pointer;
+    transition:all 0.12s ease;
   }
   .promo-choices button:hover{ border-color:var(--gold); background:var(--gold); color:#1c1810; }
 
   footer{
     text-align:center;
     color:var(--muted);
-    font-size:0.76rem;
-    margin-top:36px;
+    font-size:0.74rem;
+    margin-top:32px;
   }
 </style>
 </head>
@@ -444,13 +486,14 @@
 <div class="app">
   <header>
     <div>
-      <h1>Quiet Study <span>— a chess board</span></h1>
-      <p>Play either side. The engine on the other side of the board thinks in minimax.</p>
-      <p>version 3.0</p>
+      <h1>Quiet Study <span>— chess</span></h1>
+      <p class="header-sub">Play either side · Engine thinks locally in your browser</p>
     </div>
+    <span class="header-badge">v3.0 · Stockfish</span>
   </header>
 
   <main>
+    <!-- Board column -->
     <div class="board-wrap">
       <div class="board-frame">
         <div class="board-with-ranks">
@@ -461,101 +504,126 @@
       </div>
       <div class="status" id="status">Set up your game and press New Game.</div>
       <div class="hint-banner" id="hintBanner"></div>
-      <button class="btn subtle warn setup-remove-inline" id="setupRemoveBtn" disabled>✕ Remove selected piece</button>
+    </div>
 
-      <section class="control-group setup-panel" id="setupPanel">
-        <h2>Board setup mode</h2>
-        <div class="setup-grid">
-          <label>
-            Drag pieces from tray
+    <!-- Right panel -->
+    <aside class="panel">
+
+      <!-- Game controls — visible in normal mode -->
+      <div id="gameControls">
+
+        <section class="control-group">
+          <h2>Play as</h2>
+          <div class="toggle">
+            <button class="side-btn active" data-side="w">White</button>
+            <button class="side-btn" data-side="b">Black</button>
+          </div>
+        </section>
+
+        <section class="control-group">
+          <h2>Opponent strength</h2>
+          <select id="difficulty">
+            <option value="1">Easy — ~1320 Elo</option>
+            <option value="2" selected>Medium — ~1600 Elo</option>
+            <option value="3">Hard — ~2300 Elo</option>
+            <option value="4">Expert — full strength</option>
+          </select>
+          <div class="difficulty-note" id="engineStatusNote">Powered by Stockfish, running locally in your browser.</div>
+        </section>
+
+        <section class="control-group buttons-row">
+          <button class="btn primary" id="newGameBtn">↺ New Game</button>
+          <button class="btn" id="undoBtn">⤺ Undo my last move</button>
+          <button class="btn" id="undoAiBtn">⟲ Undo AI move &amp; play manually</button>
+          <button class="btn" id="rotateBtn">⇅ Rotate Board</button>
+          <button class="btn" id="hintBtn">◆ Hint — Stockfish suggestion</button>
+          <button class="btn subtle" id="setupBtn">✎ Setup Position</button>
+        </section>
+
+        <section class="control-group captured">
+          <div>
+            <div class="captured-label">Captured by White</div>
+            <div class="captured-row" id="capturedByWhite"></div>
+          </div>
+          <div>
+            <div class="captured-label">Captured by Black</div>
+            <div class="captured-row" id="capturedByBlack"></div>
+          </div>
+        </section>
+
+        <section class="control-group history">
+          <h2>Moves</h2>
+          <ol id="moveList"></ol>
+        </section>
+
+      </div><!-- /#gameControls -->
+
+      <!-- Setup panel — visible in setup mode only -->
+      <section class="setup-panel" id="setupPanel">
+
+        <div class="setup-panel-header">
+          <h2>⚙ Setup Position</h2>
+          <button class="btn subtle" id="setupCancelBtn" style="padding:5px 10px;font-size:0.8rem;">✕ Cancel</button>
+        </div>
+
+        <div class="setup-panel-body">
+
+          <div>
+            <div class="setup-section-label">Drag pieces onto the board</div>
             <div class="piece-bank" id="pieceBank">
-              <button type="button" draggable="true" data-piece="wp">♙</button>
-              <button type="button" draggable="true" data-piece="wn">♘</button>
-              <button type="button" draggable="true" data-piece="wb">♗</button>
-              <button type="button" draggable="true" data-piece="wr">♖</button>
-              <button type="button" draggable="true" data-piece="wq">♕</button>
-              <button type="button" draggable="true" data-piece="wk">♔</button>
-              <button type="button" draggable="true" data-piece="bp">♟</button>
-              <button type="button" draggable="true" data-piece="bn">♞</button>
-              <button type="button" draggable="true" data-piece="bb">♝</button>
-              <button type="button" draggable="true" data-piece="br">♜</button>
-              <button type="button" draggable="true" data-piece="bq">♛</button>
-              <button type="button" draggable="true" data-piece="bk">♚</button>
+              <button type="button" draggable="true" data-piece="wk" class="white-bank-piece">♔</button>
+              <button type="button" draggable="true" data-piece="wq" class="white-bank-piece">♕</button>
+              <button type="button" draggable="true" data-piece="wr" class="white-bank-piece">♖</button>
+              <button type="button" draggable="true" data-piece="wb" class="white-bank-piece">♗</button>
+              <button type="button" draggable="true" data-piece="wn" class="white-bank-piece">♘</button>
+              <button type="button" draggable="true" data-piece="wp" class="white-bank-piece">♙</button>
+              <div class="piece-bank-divider"></div>
+              <button type="button" draggable="true" data-piece="bk" class="black-bank-piece">♚</button>
+              <button type="button" draggable="true" data-piece="bq" class="black-bank-piece">♛</button>
+              <button type="button" draggable="true" data-piece="br" class="black-bank-piece">♜</button>
+              <button type="button" draggable="true" data-piece="bb" class="black-bank-piece">♝</button>
+              <button type="button" draggable="true" data-piece="bn" class="black-bank-piece">♞</button>
+              <button type="button" draggable="true" data-piece="bp" class="black-bank-piece">♟</button>
             </div>
-          </label>
-          <label>
-            Side to move
-            <select id="setupTurnSel">
+          </div>
+
+          <div>
+            <div class="setup-section-label">Side to move</div>
+            <select id="setupTurnSel" class="setup-select">
               <option value="w">White to move</option>
               <option value="b">Black to move</option>
             </select>
-          </label>
-        </div>
-        <div class="castle-row">
-          Castling rights:
-          <label><input type="checkbox" id="castleK" checked> K</label>
-          <label><input type="checkbox" id="castleQ" checked> Q</label>
-          <label><input type="checkbox" id="castlek" checked> k</label>
-          <label><input type="checkbox" id="castleq" checked> q</label>
-        </div>
-        <div class="setup-actions">
-          <button class="btn subtle" id="setupClearBtn">Clear board</button>
-          <button class="btn subtle" id="setupResetBtn">Reset standard</button>
-          <button class="btn" id="setupCancelBtn">Cancel setup</button>
-          <button class="btn primary" id="setupApplyBtn">Start from this position</button>
-        </div>
-        <div class="setup-note">Drag from tray to place, drag board pieces to move, drop into remove zone to delete.</div>
-      </section>
-    </div>
+          </div>
 
-    <aside class="panel">
-      <section class="control-group">
-        <h2>Play as</h2>
-        <div class="toggle">
-          <button class="side-btn active" data-side="w">White</button>
-          <button class="side-btn" data-side="b">Black</button>
-        </div>
-      </section>
+          <div>
+            <div class="setup-section-label">Castling rights</div>
+            <div class="castle-row">
+              <label><input type="checkbox" id="castleK" checked> K (white O-O)</label>
+              <label><input type="checkbox" id="castleQ" checked> Q (white O-O-O)</label>
+              <label><input type="checkbox" id="castlek" checked> k (black O-O)</label>
+              <label><input type="checkbox" id="castleq" checked> q (black O-O-O)</label>
+            </div>
+          </div>
 
-      <section class="control-group">
-        <h2>Opponent strength</h2>
-        <select id="difficulty">
-          <option value="1">Easy — about 1320 Elo</option>
-          <option value="2" selected>Medium — about 1600 Elo</option>
-          <option value="3">Hard — about 2300 Elo</option>
-          <option value="4">Expert — full engine strength</option>
-        </select>
-        <div class="difficulty-note" id="engineStatusNote">Powered by Stockfish, running locally in your browser.</div>
-      </section>
+          <div class="setup-actions">
+            <button class="btn warn" id="setupRemoveBtn" disabled>✕ Remove selected piece</button>
+            <div class="setup-actions-row">
+              <button class="btn subtle" id="setupClearBtn">Clear board</button>
+              <button class="btn subtle" id="setupResetBtn">Reset to start</button>
+            </div>
+            <button class="btn primary" id="setupApplyBtn">▶ Start from this position</button>
+          </div>
 
-      <section class="control-group buttons-row">
-        <button class="btn" id="newGameBtn">↺ New Game</button>
-        <button class="btn" id="undoBtn">⤺ Undo my last move</button>
-        <button class="btn" id="undoAiBtn">⟲ Undo AI move &amp; play manually</button>
-        <button class="btn" id="rotateBtn">⇅ Rotate Board</button>
-        <button class="btn primary" id="hintBtn">◆ Hint (Stockfish suggestion)</button>
-        <button class="btn subtle" id="setupBtn">✎ Setup Position</button>
-      </section>
+          <p class="setup-note">Drag pieces from the tray to place them. Click a board piece to select it, then use Remove. Drag board pieces to reposition.</p>
 
-      <section class="control-group captured">
-        <div>
-          <div class="captured-label">Captured by White</div>
-          <div class="captured-row" id="capturedByWhite"></div>
-        </div>
-        <div>
-          <div class="captured-label">Captured by Black</div>
-          <div class="captured-row" id="capturedByBlack"></div>
-        </div>
-      </section>
+        </div><!-- /.setup-panel-body -->
 
-      <section class="control-group history">
-        <h2>Moves</h2>
-        <ol id="moveList"></ol>
-      </section>
+      </section><!-- /#setupPanel -->
+
     </aside>
   </main>
 
-  <footer>Move generation and rules by chess.js. Opponent and hints computed locally with alpha-beta minimax.</footer>
+  <footer>Move generation &amp; rules by chess.js · Opponent and hints powered by Stockfish WASM</footer>
 </div>
 
 <div class="modal-overlay hidden" id="promoModal">
@@ -1313,17 +1381,16 @@ function enterSetupMode(){
   hintMove = null;
   hintBanner.classList.remove('show');
   setupTurnSel.value = game.turn();
+  document.getElementById('gameControls').classList.add('hidden');
   setupPanel.classList.add('show');
-  setupRemoveBtn.classList.add('show');
-  setupBtn.textContent = '✎ Editing Position';
   render();
 }
 
 function exitSetupMode(){
   setupMode = false;
   dragPayload = null;
+  document.getElementById('gameControls').classList.remove('hidden');
   setupPanel.classList.remove('show');
-  setupRemoveBtn.classList.remove('show');
   setupBtn.textContent = '✎ Setup Position';
   render();
 }
@@ -1555,8 +1622,8 @@ hintBtn.addEventListener('click', () => {
 function startNewGame(){
   if (setupMode){
     setupMode = false;
+    document.getElementById('gameControls').classList.remove('hidden');
     setupPanel.classList.remove('show');
-    setupRemoveBtn.classList.remove('show');
     setupBtn.textContent = '✎ Setup Position';
   }
   game.reset();
