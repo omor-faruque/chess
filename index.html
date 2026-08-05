@@ -614,7 +614,7 @@
             <button class="btn primary" id="setupApplyBtn">▶ Start from this position</button>
           </div>
 
-          <p class="setup-note">Drag pieces from the tray to place them. Click a board piece to select it, then use Remove. Drag board pieces to reposition.</p>
+          <p class="setup-note">Drag pieces from the tray to place them. Click pieces to select (click again to deselect); select multiple and use Remove to delete them all at once. Drag board pieces to reposition.</p>
 
         </div><!-- /.setup-panel-body -->
 
@@ -974,6 +974,7 @@ let manualOverride = false;
 let setupMode = false;
 let setupBackupFen = null;
 let dragPayload = null;
+let setupSelectedSquares = new Set();
 
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('status');
@@ -1053,7 +1054,7 @@ function render(){
       sq.dataset.square = name;
       if (setupMode) sq.classList.add('setup-mode');
 
-      if (selectedSquare === name) sq.classList.add('selected');
+      if (setupMode ? setupSelectedSquares.has(name) : selectedSquare === name) sq.classList.add('selected');
       if (lastMove && (lastMove.from === name)) sq.classList.add(lastMover === 'ai' ? 'ai-from' : 'last-from');
       if (lastMove && (lastMove.to === name)) sq.classList.add(lastMover === 'ai' ? 'ai-to' : 'last-to');
       if (hintMove && hintMove.from === name) sq.classList.add('hint-from');
@@ -1101,8 +1102,9 @@ function render(){
 
 function updateSetupRemoveButton(){
   if (!setupRemoveBtn) return;
-  const canRemove = setupMode && selectedSquare && !!game.get(selectedSquare);
-  setupRemoveBtn.disabled = !canRemove;
+  const count = setupMode ? setupSelectedSquares.size : 0;
+  setupRemoveBtn.disabled = count === 0;
+  setupRemoveBtn.textContent = count > 1 ? `✕ Remove ${count} pieces` : '✕ Remove selected piece';
 }
 
 function getCheckedKingSquare(){
@@ -1208,9 +1210,13 @@ function onSquareClick(square){
   if (setupMode){
     const piece = game.get(square);
     if (piece){
-      selectedSquare = square;
+      if (setupSelectedSquares.has(square)){
+        setupSelectedSquares.delete(square);
+      } else {
+        setupSelectedSquares.add(square);
+      }
     } else {
-      selectedSquare = null;
+      setupSelectedSquares.clear();
     }
     legalTargets = [];
     render();
@@ -1377,6 +1383,7 @@ function enterSetupMode(){
   setupBackupFen = game.fen();
   manualOverride = false;
   selectedSquare = null;
+  setupSelectedSquares.clear();
   legalTargets = [];
   hintMove = null;
   hintBanner.classList.remove('show');
@@ -1389,6 +1396,7 @@ function enterSetupMode(){
 function exitSetupMode(){
   setupMode = false;
   dragPayload = null;
+  setupSelectedSquares.clear();
   document.getElementById('gameControls').classList.remove('hidden');
   setupPanel.classList.remove('show');
   setupBtn.textContent = '✎ Setup Position';
@@ -1443,6 +1451,7 @@ function onSquareDrop(e, targetSquare){
     }
   }
 
+  setupSelectedSquares.clear();
   selectedSquare = null;
   legalTargets = [];
   hintMove = null;
@@ -1517,12 +1526,14 @@ setupCancelBtn.addEventListener('click', cancelSetup);
 setupClearBtn.addEventListener('click', () => {
   if (!setupMode) return;
   game.clear();
+  setupSelectedSquares.clear();
   render();
 });
 
 setupResetBtn.addEventListener('click', () => {
   if (!setupMode) return;
   game.reset();
+  setupSelectedSquares.clear();
   selectedSquare = null;
   setupTurnSel.value = 'w';
   castleK.checked = true;
@@ -1533,9 +1544,9 @@ setupResetBtn.addEventListener('click', () => {
 });
 
 setupRemoveBtn.addEventListener('click', () => {
-  if (!setupMode || !selectedSquare) return;
-  if (!game.get(selectedSquare)) return;
-  game.remove(selectedSquare);
+  if (!setupMode || setupSelectedSquares.size === 0) return;
+  setupSelectedSquares.forEach(sq => { if (game.get(sq)) game.remove(sq); });
+  setupSelectedSquares.clear();
   selectedSquare = null;
   legalTargets = [];
   hintMove = null;
