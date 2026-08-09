@@ -1009,8 +1009,10 @@ const rotateBtn = document.getElementById('rotateBtn');
 const FILES = ['a','b','c','d','e','f','g','h'];
 
 function getViewColor(){
-  if (!boardFlipped) return humanColor;
-  return humanColor === 'w' ? 'b' : 'w';
+  // `vc` represents the side shown at the bottom of the board.
+  // Default view puts the selected human side at the top.
+  if (!boardFlipped) return humanColor === 'w' ? 'b' : 'w';
+  return humanColor;
 }
 
 function squareName(row, col){
@@ -1387,7 +1389,7 @@ function enterSetupMode(){
   legalTargets = [];
   hintMove = null;
   hintBanner.classList.remove('show');
-  setupTurnSel.value = game.turn();
+  setupTurnSel.value = humanColor === 'w' ? 'b' : 'w';
   document.getElementById('gameControls').classList.add('hidden');
   setupPanel.classList.add('show');
   render();
